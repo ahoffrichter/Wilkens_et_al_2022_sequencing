@@ -1,0 +1,1038 @@
+---
+title: "Figures for RNAseq data"
+author: "Anne Hoffrichter"
+date: "2021/04/27"
+output:
+  bookdown::html_document2:
+    code_folding: show
+    fig_caption: true
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: yes
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=80),tidy=TRUE, fig.asp=0.5, fig.width=6, warning = FALSE, dev="svg")
+```
+
+# Goal
+
+Preparing bulk RNAseq figures for publication.
+
+# Approach
+
+**Load libraries**
+
+```{r loadLibraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+library(DESeq2)
+library(purrr)
+library(pheatmap)
+library(viridis)
+#library(clusterProfiler)
+library(GO.db)
+library(TCseq)
+library(clusterProfiler)
+library(patchwork)
+library(reshape2)
+
+set.seed(42)
+```
+
+```{r}
+dds <- readRDS("../data/dds.rds")
+# res <- readRDS("../data/res.rds")
+```
+
+## Figure 1 D
+###Euclidean distance
+
+```{r}
+rld <- rlog(dds , blind = TRUE)
+sampleDist <- rld %>% assay() %>% t() %>% dist
+sampleDistMatrix <- as.matrix(sampleDist)
+rownames(sampleDistMatrix) <- paste(colnames(rld), " - ", rld$timepoint)
+colnames(sampleDistMatrix) <- NULL
+```
+
+```{r, fig.asp=0.7, fig.width=12, fig.cap="Sample distance matrix (heatmap) using rlog transformed values"}
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows = sampleDist,
+         clustering_distance_cols = sampleDist,
+         col = rev(plasma(255)), treeheight_col=0, treeheight_row = 100, border_color = NA)
+```
+
+### PCA
+
+```{r}
+rv <- rowVars(assay(rld))
+rv <- order(rv, decreasing = TRUE)[seq_len(min(500, length(rv)))]
+
+pca <- prcomp(t(assay(rld)[rv, ]))
+
+percentVar <- pca$sdev^2/sum(pca$sdev^2)
+percentVar <- round(percentVar*100, digits = 2)
+intgroup.df <- as.data.frame(colData(rld)[, "timepoint", drop = FALSE])
+d <- data.frame(PC1 = pca$x[, 1], PC2 = pca$x[, 2],PC3 = pca$x[, 3], intgroup.df, name = colnames(rld))
+```
+
+```{r}
+# Vector for time point colors
+cc <- c("#F7E51D", "#38AF7A", "#34618D",  "#41235A")
+names(cc) <- c("NPC", "d5", "d25", "d45")
+```
+
+```{r}
+# Vector of colors for each sample
+m <- cc[d$timepoint]
+```
+
+```{r, fig.asp=0.8, fig.width=10}
+ggplot(d, aes(PC1, PC2, color=timepoint))+ 
+  geom_point(size=10)+
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) + 
+  theme_gray(base_size = 24)+
+  scale_color_manual(values=m)+
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) 
+```
+
+## Figure 1 E: Heatmap marker genes
+
+```{r}
+genes <- c("MKI67", "SOX2", "HES1", "HES5", "NES", "PAX6", "TUBB3", "STMN1", "FAT3", "DCX", "RBFOX3", "ZBTB38", "MAPT", "CAMK2A", "CAMK4", "NRXN1", "NCAM1", "SNAP25", "DLG4", "SYP", "SYN1", "SYT1", "ANK3", "SPTBN4", "SCN2A", "GRIN1", "GRIN2B", "GRIA1", "GRIA2", "GABRA3", "GABRB2", "ARC", "NPAS4", "FOS", "SLC17A7", "GAD1", "FOXG1")
+```
+
+```{r}
+ncounts1 <- dds[dds@rowRanges@elementMetadata@listData[["gene_symbol"]] %in% genes]
+ncounts <- counts(ncounts1, normalize=T)
+rownames(ncounts) <- ncounts1@rowRanges@elementMetadata@listData[["gene_symbol"]]
+colnames(ncounts) <- c("NPC_1", "d5_1", "d25_1", "d45_1", "NPC_2", "NPC_3", "d5_2", "d25_2", "d45_2","d5_3", "d25_3", "d45_3")
+ncounts <- ncounts[,c(1,5,6,2,7,10,3,8,11,4,9,12)]
+ncounts <- ncounts[match(genes, rownames(ncounts)),]
+```
+
+```{r}
+my_zscale <- function(x){
+  M <- rowMeans(x, na.rm = TRUE)
+  nsamples <- ncol(x)
+  DF <- nsamples - 1L
+  IsNA <- is.na(x)
+  if (any(IsNA)) {
+    mode(IsNA) <- "integer"
+    DF <- DF - rowSums(IsNA)
+    DF[DF == 0L] <- 1L
+  }
+  x <- x - M
+  V <- rowSums(x^2L, na.rm = TRUE)/DF
+  x <- x/sqrt(V + 0.01)
+  out <- melt(x)
+  out
+}
+```
+
+```{r}
+zcounts <- my_zscale(ncounts)
+```
+
+```{r, fig.asp=1.2, fig.width=10, dev="pdf"}
+lims <- c(min(zcounts$value), max(zcounts$value)) %>% max()
+ggplot(data = zcounts, aes(x=Var2, y=Var1, fill=value)) +
+  geom_tile()+
+  scale_fill_viridis_c(option="viridis", limits = c(-lims,lims), breaks=c(-2,0,2))+
+  scale_y_discrete(limits = rev(levels(zcounts$Var1)), position = "right")+
+  geom_hline(yintercept = c(3.5, 6.5, 12.5, 15.5, 20.5, 27.5, 31.5), col="white", size=2)+
+  theme_minimal(base_size=20)+
+  labs(fill="Z-Score", x="", y="")+
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5), axis.text.y = element_text(face = "italic"), legend.position="bottom", legend.key.width = unit(2,"cm"))
+  
+```
+
+```{r}
+rm(list = setdiff(ls(), c("dds", "TPM", "TC_plots", "TC_res", "GO_smooth_line_plot", "kk2foldchange", "my_GO_plot", "my_zscale")))
+```
+
+## Figure 2 A: GO term temporal expression
+
+```{r }
+# change file_path to directory of featureCounts
+tbl <- list.files(path = "../raw_data/featureCounts/", pattern = "*.tsv", full.names = T)
+TPM <- map(tbl, read.table, header=T, comment.char="") %>% map(15)
+names(TPM) <- c("mat1", "mat10", "mat11", "mat12", "mat2", "mat3", "mat4", "mat5", "mat6", "mat7", "mat8", "mat9")
+TPM <- TPM %>% as.data.frame()
+rownames(TPM) <- read.table(tbl[1], header = T, comment.char = "")[,4] %>% substr(1,15)
+TPM$gene_name <- read.table(tbl[1], header = T, comment.char = "")$name
+TPM$ENSID <- rownames(TPM)
+```
+
+```{r}
+mat <- TPM[,1:12]
+gene_symbol <-rownames(mat)
+names(gene_symbol) <-  TPM$gene_name
+```
+
+```{r}
+GO_smooth_line_plot <- function(data){
+  rowm <- rowMeans(df)
+  names(rowm) <- c("NPC", "d5", "d25", "d45", "NPC", "NPC", "d5", "d25", "d45","d5", "d25", "d45")
+  rowm <- as.data.frame(rowm)
+  rowm$timepoint <- c("NPC", "d5", "d25", "d45", "NPC", "NPC", "d5", "d25", "d45","d5", "d25", "d45")
+  rowm$timepoint_sample <- c("NPC_1", "d5_1", "d25_1", "d45_1", "NPC_2", "NPC_3", "d5_2", "d25_2", "d45_2","d5_3", "d25_3", "d45_3")
+  p <- mutate(rowm, timepoint=factor(timepoint,ordered=T, c("NPC", "d5", "d25", "d45")))
+  y <- aggregate(p[, 1], list(p$timepoint), mean)
+  se <- aggregate(p[, 1], list(p$timepoint), sd)
+
+  df <- data.frame(timepoint=ordered(c("NPC", "d5", "d25", "d45"), levels=c("NPC", "d5", "d25", "d45")), TPM=y$x, se=se$x)
+  print(
+    ggplot(NULL,  aes(x= as.numeric(timepoint)))+ 
+      geom_smooth(data=df, aes(as.numeric(timepoint), TPM, ymin = TPM - se, ymax = TPM + se), stat="identity", col="red")+
+      scale_x_discrete(limits=c("NPC", "d5", "d25", "d45")) +
+      scale_y_log10()+ 
+      theme_classic(base_size = 24)+
+      theme(legend.title=element_blank(), axis.title.x = element_blank(), axis.text = element_text(size=30), axis.title.y = element_text(size=30))+
+      ylab("TPM")+
+      coord_cartesian(xlim = c(1,4.1), expand = FALSE)
+  )
+}
+```
+
+### Negative regulation of neuron death:
+
+```{r}
+go_id = GOID( GOTERM[ Term(GOTERM) == "negative regulation of neuron death"])
+allegs <- get(go_id, org.Hs.egGO2ALLEGS)
+genes <- unlist(mget(allegs, org.Hs.egSYMBOL))
+genes <- unique(genes)
+```
+
+Number of unique genes in `r names(go_id)`: `r length(genes)`
+
+```{r}
+df <- t(mat[gene_symbol[genes], ]) 
+colnames(df) <- c(genes)
+df <- as.data.frame(df)
+
+all_na <- function(x) any(!is.na(x))
+
+df <- df %>% select_if(all_na)
+```
+
+Number of genes from `r names(go_id)` in dataset: `r length(colnames(df))`
+
+```{r}
+GO_table <- function(genes){
+  df <- mat[gene_symbol[genes], ]
+  rownames(df) <- c(genes)
+  df <- na.omit(df)
+  df <- as.data.frame(df)
+  NPC <- rowMeans(df[,c(1,5,6)])
+  d5 <- rowMeans(df[,c(2,7,10)])
+  d25 <- rowMeans(df[,c(3,8,11)])
+  d45 <-  rowMeans(df[,c(4,9,12)])
+  df_mean <- data.frame(NPC=NPC, d5=d5, d25=d25, d45=d45)
+  df_mean
+}
+```
+
+```{r}
+GO_table(genes) %>% write.csv(file="../data/genes_negative_regulation_neuron_death.csv")
+#%>% DT::datatable(extensions = 'Buttons',
+#             options = list(dom = 'Blfrtip',
+#               buttons = c('csv', 'excel'),
+#               lengthMenu = list(c(10,25,50,-1), c(10,25,50,"All"))
+#             ),
+#             width = "300px")
+```
+
+```{r, fig.asp=0.7}
+GO_smooth_line_plot(df)
+```
+
+### Execution phase of apoptosis:
+
+```{r}
+go_id = GOID( GOTERM[ Term(GOTERM) == "execution phase of apoptosis"])
+allegs <- get(go_id, org.Hs.egGO2ALLEGS)
+genes <- unlist(mget(allegs, org.Hs.egSYMBOL))
+genes <- unique(genes)
+```
+
+Number of unique genes in `r names(go_id)`: `r length(genes)`
+
+```{r}
+df <- t(mat[gene_symbol[genes], ]) 
+colnames(df) <- c(genes)
+df <- as.data.frame(df)
+
+all_na <- function(x) any(!is.na(x))
+
+df <- df %>% select_if(all_na)
+```
+
+Number of genes from `r names(go_id)` in dataset: `r length(colnames(df))`
+
+```{r}
+GO_table(genes) %>% write.csv(file="../data/genes_execution_phase_of_apoptosis.csv")
+# %>% DT::datatable(extensions = 'Buttons',
+#             options = list(dom = 'Blfrtip',
+#               buttons = c('csv', 'excel'),
+#               lengthMenu = list(c(10,25,50,-1), c(10,25,50,"All"))
+#             ),
+#             width = "300px")
+```
+
+```{r, fig.asp=0.7}
+GO_smooth_line_plot(df)
+```
+
+## Figure 2 G: Heatmap
+
+```{r}
+genes <- c("BAX", "BAK1", "BCL2", "BCL2L1", "BCL2L2", "MCL1", "BID", "BAD", "HRK", "BOK", "BCL2L11", "BBC3", "PMAIP1", "BMF")
+```
+
+```{r}
+ncounts1 <- dds[dds@rowRanges@elementMetadata@listData[["gene_symbol"]] %in% genes]
+ncounts <- counts(ncounts1, normalize=T)
+rownames(ncounts) <- ncounts1@rowRanges@elementMetadata@listData[["gene_symbol"]]
+colnames(ncounts) <- c("NPC_1", "d5_1", "d25_1", "d45_1", "NPC_2", "NPC_3", "d5_2", "d25_2", "d45_2","d5_3", "d25_3", "d45_3")
+ncounts <- ncounts[,c(1,5,6,2,7,10,3,8,11,4,9,12)]
+ncounts <- ncounts[match(genes, rownames(ncounts)),]
+```
+
+```{r}
+ncounts <- ncounts[match(genes, rownames(ncounts)),]
+NPC <- rowMeans(ncounts[,1:3])
+d5 <- rowMeans(ncounts[,4:6])
+d25 <- rowMeans(ncounts[,7:9])
+d45 <- rowMeans(ncounts[,10:12])
+av_ncounts <- cbind(NPC, d5,d25,d45)
+```
+
+```{r}
+zcounts <- my_zscale(av_ncounts)
+```
+
+```{r, fig.asp=1, fig.width=10, dev="pdf"}
+ggplot(data = zcounts, aes(x=Var2, y=Var1, fill=value)) +
+  geom_tile()+
+  scale_fill_viridis_c(option="viridis", limits = c(-1.5,1.5), breaks=c(-1.5,0,1.5))+
+  scale_y_discrete(limits = rev(levels(zcounts$Var1)))+
+  geom_hline(yintercept = c(12.5,8.5), col="white", size=3)+
+  theme_minimal(base_size=30)+
+  labs(fill="Z-Score", x="", y="")+
+  theme(axis.text.x = element_text(angle = 0, vjust=0.5), axis.text.y = element_text(face = "italic"), legend.title = element_text(size = 24), legend.text = element_text(size = 20))+
+  scale_x_discrete(position = "top") 
+  
+```
+
+## Figure 2 H: BAX & BCL2 TPM expression in one plot
+
+```{r}
+df <- t(TPM[gene_symbol[c("BAX", "BCL2")], 1:12]) 
+colnames(df) <- c("BAX", "BCL2")
+df <- as.data.frame(df)
+df$timepoint_sample <- c("NPC_1", "d5_1", "d25_1", "d45_1", "NPC_2", "NPC_3", "d5_2", "d25_2", "d45_2","d5_3", "d25_3", "d45_3")
+df$timepoint <- c("NPC", "d5", "d25", "d45", "NPC", "NPC", "d5", "d25", "d45","d5", "d25", "d45")
+```
+
+```{r, fig.asp=1, fig.width=5, dev="svglite"}
+p <- mutate(df, timepoint=factor(timepoint,ordered=T, c("NPC", "d5", "d25", "d45")))
+
+BAX <- aggregate(p[, 1], list(p$timepoint), mean)
+BAX_se <- aggregate(p[, 1], list(p$timepoint), sd)
+
+BCL2 <- aggregate(p[, 2], list(p$timepoint), mean)
+BCL2_se <- aggregate(p[, 2], list(p$timepoint), sd)
+
+df2 <- data.frame(timepoint=ordered(c("NPC", "d5", "d25", "d45"), levels=c("NPC", "d5", "d25", "d45")), BAX=BAX$x, BAX_se=BAX_se$x, BCL2=BCL2$x, BCL2_se=BCL2_se$x)
+
+ggplot(NULL,  aes(x= as.numeric(timepoint)))+ 
+  geom_smooth(data=df2, aes(as.numeric(timepoint), BAX, ymin = BAX - BAX_se, ymax = BAX + BAX_se, color="BAX", fill="BAX"), stat="identity")+
+  geom_smooth(data=df2, aes(as.numeric(timepoint), BCL2, ymin = BCL2 - BCL2_se, ymax = BCL2 + BCL2_se, color="BCL2", fill="BCL2"), stat="identity")+
+  scale_x_discrete(limits=c("NPC", "d5", "d25", "d45")) +
+  scale_y_log10()+ 
+  theme_classic(base_size = 28)+
+  theme(legend.title=element_blank(), 
+        axis.title.x = element_blank(), 
+        legend.text = element_text(face="italic"),
+        legend.position = c(0.85, 0.9))+
+  ylab("TPM")+
+  coord_cartesian(xlim = c(1,4.1), expand = FALSE)+
+  scale_colour_manual(name = 'Gene', values =c('BAX'='red', 'BCL2'="#5FB568"), labels = c('BAX', 'BCL2'), aesthetics = c("color", "fill"))
+```
+
+```{r}
+rm(list = setdiff(ls(), c("dds", "TPM", "TPM_long", "gene_symbol", "GO_smooth_line_plot", "TC_plots", "TC_res", "kk2foldchange", "my_GO_plot", "my_zscale")))
+```
+
+## Supp. Figure 1 D
+
+```{r}
+design <- as.data.frame(colData(dds))
+design$sampleid <- rownames(design)
+design$group <- design$batch
+#design <- design[,c(1,4,5)]
+
+design$timepoint2 <- c("NPC-1", "d5-1", "d25-1", "d45-1", "NPC-2", "NPC-3", "d5-2", "d25-2", "d45-2", "d5-3", "d25-3", "d45-3")
+design$timepoint2 <- factor(design$timepoint2, levels = c("NPC-1", "NPC-2", "NPC-3", "d5-1", "d5-2", "d5-3", "d25-1", "d25-2", "d25-3", "d45-1", "d45-2", "d45-3"))
+design <- design[,c(1,6,4,5)]
+```
+
+```{r}
+tbl <- list.files(path ="../raw_data/featureCounts/", pattern = "*.tsv", full.names = T)
+l <- read.table(tbl[1], header=T, comment.char = "")
+l <- l[,c(1,2,3,4,7)]
+l$gene_id <- l$gene_id%>% substr(1,15)
+```
+
+```{r}
+counts <- counts(dds)
+id <- dds@rowRanges@elementMetadata$gene_symbol
+id <- as.data.frame(id)
+id$ENS <- rownames(dds) 
+
+x <- merge(id, l, by.x=2, by.y=4, sort=F)
+
+features <- data.frame(id=x$ENS, chr=x$X.chrom, start=x$chromStart, end=x$chromEnd)
+```
+
+```{r}
+tca <- TCA(design, counts=counts, genomicFeature = features)
+```
+
+```{r}
+tca <- DBanalysis(tca, filter.type = "raw", filter.value = 10, samplePassfilter = 2)
+```
+
+```{r}
+tca <- timecourseTable(tca, value = "expression", norm.method = "rpkm", filter = TRUE)
+t <- tcTable(tca)
+```
+
+```{r}
+tca <- timeclust(tca, algo = "cm", k = 12, standardize = TRUE)
+```
+
+```{r, fig.asp=1, fig.width=12}
+TC_plots <- timeclustplot(tca, value = "z-score(RPKM)", cols = 3, membership.color =plasma(200))
+```
+
+```{r}
+cluster <- tca@clusterRes@cluster
+df <- as.data.frame(cluster)
+ens.str <- rownames(df)
+df$symbol <- mapIds(org.Hs.eg.db,
+                     keys=ens.str,
+                     column="SYMBOL",
+                     keytype="ENSEMBL",
+                     multiVals="first")  
+for(i in seq_along(df$cluster)){
+  df$membership_percentage[i] <- tca@clusterRes@membership[i, df$cluster[i]]
+}
+```
+
+```{r}
+TC_res <- split(df, as.factor(df$cluster))
+```
+
+```{r, message=FALSE, warning=FALSE}
+for (i in 1:length(TC_res)){
+  ens.str <- rownames(TC_res[[i]])
+  TC_res[[i]]$ENTREZ <- mapIds(org.Hs.eg.db,
+                     keys=ens.str,
+                     column="ENTREZID",
+                     keytype="ENSEMBL",
+                     multiVals="first")  
+}
+```
+
+### gene cluster2
+
+```{r}
+df <- as.data.frame(TC_res[[2]])
+sigGenes <- df$ENTREZ
+sigGenes <- na.exclude(sigGenes)
+```
+
+```{r, fig.width=10}
+TC_plots[[2]]+theme_classic(base_size = 24)+
+  scale_color_viridis(breaks=c(0.2,0.4,0.6,0.8),option = "C")
+```
+
+```{r}
+# Function for calculating the fold changes from the GeneRatio/BgRatio values from the output of enrichGO
+
+kk2foldchange <- function(kk){
+  GO <- as.data.frame(kk)
+  GeneRatio <- strsplit(GO$GeneRatio,"/")
+  GRdf <- data.frame()
+  for (i in seq_along(GeneRatio)){
+    GRdf[i,1] <- GeneRatio[[i]][1]
+    GRdf[i,2] <- GeneRatio[[i]][2]
+  }
+  GRdf$V1 <- as.numeric(GRdf$V1)
+  GRdf$V2 <- as.numeric(GRdf$V2)
+  GO$GeneRatio2 <- GRdf$V1/GRdf$V2
+  BgRatio <- strsplit(GO$BgRatio,"/")
+  BgRdf <- data.frame()
+  for (i in seq_along(BgRatio)){
+    BgRdf[i,1] <- BgRatio[[i]][1]
+    BgRdf[i,2] <- BgRatio[[i]][2]
+  }
+  BgRdf$V1 <- as.numeric(BgRdf$V1)
+  BgRdf$V2 <- as.numeric(BgRdf$V2)
+  GO$BgRatio2 <- BgRdf$V1/BgRdf$V2
+  GO$foldchange <- GO$GeneRatio2/GO$BgRatio2
+  return(GO)
+}
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+kk <- enrichGO(gene = sigGenes, ont="BP", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[1:length(GO$ID),]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(24, 25, 27, 28, 30),]
+```
+
+```{r, fig.asp=0.3, fig.width=12}
+my_GO_plot <- function(){
+ggplot(GO_ordered, aes(foldchange, reorder(stringr::str_wrap(Description, 40), foldchange))) +
+  geom_col(aes(fill=p.adjust))+
+  theme_minimal(base_size = 24)+
+  xlab("fold enrichment")+
+  ylab("")+labs(fill = "p.adjust")
+}
+BP <- my_GO_plot()
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+### GO plot - molecular function
+kk <- enrichGO(gene = sigGenes, ont="MF", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(23, 26, 27, 29, 30), ]
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+MF <- my_GO_plot()
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+### GO plot - cellular component
+kk <- enrichGO(gene = sigGenes, ont="CC", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(23,24,25,28, 30),]
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+CC <- my_GO_plot()
+```
+
+```{r, fig.width=12, fig.asp=1.1}
+(c2 <- BP/MF/CC)
+```
+
+### Gene cluster3
+
+```{r}
+df <- as.data.frame(TC_res[[3]])
+sigGenes <- df$ENTREZ
+sigGenes <- na.exclude(sigGenes)
+```
+
+```{r, fig.width=10}
+TC_plots[[3]]+theme_classic(base_size = 24)+
+  scale_color_viridis(breaks=c(0.2,0.4,0.6,0.8),option = "C")
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+# GO plot - biological process
+kk <- enrichGO(gene = sigGenes, ont="BP", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[1:length(GO$ID),]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(24,25,28,29,30),]
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+BP <- my_GO_plot()
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+# GO plot - molecular function
+kk <- enrichGO(gene = sigGenes, ont="MF", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(22, 26, 27,29,30), ]
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+MF <- my_GO_plot()
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+# GO plot - cellular component
+kk <- enrichGO(gene = sigGenes, ont="CC", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(25,26,28,29,30),]
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+CC <- my_GO_plot()
+```
+
+```{r, fig.width=12, fig.asp=1.1}
+# combined plots
+(c3 <- BP/MF/CC)
+```
+
+```{r}
+rm(list = setdiff(ls(), c("dds", "TPM", "gene_symbol", "TC_plots", "TC_res", "GO_smooth_line_plot", "kk2foldchange", "my_GO_plot", "my_zscale")))
+```
+
+### Gene cluster 10
+
+```{r}
+df <- as.data.frame(TC_res[[10]])
+sigGenes <- df$ENTREZ
+sigGenes <- na.exclude(sigGenes)
+```
+
+```{r, fig.width=10}
+TC_plots[[10]]+theme_classic(base_size = 24)+
+  scale_color_viridis(breaks=c(0.2,0.4,0.6,0.8),option = "C")
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+# GO-plot -  biological process
+kk <- enrichGO(gene = sigGenes, ont="BP", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[1:length(GO$ID),]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(19,20,25,27,30),]
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+BP <- my_GO_plot()
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+# GO plot - molecular function
+kk <- enrichGO(gene = sigGenes, ont="MF", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(21, 24, 27,29,30), ]
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+MF <- my_GO_plot()
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+# GO plot - cellular component
+kk <- enrichGO(gene = sigGenes, ont="CC", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(8,19,23,24,28),]
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+CC <- my_GO_plot()
+```
+
+```{r, fig.width=12, fig.asp=1.1}
+(c10 <- BP/MF/CC)
+```
+
+### Gene cluster1
+
+```{r}
+df <- as.data.frame(TC_res[[1]])
+sigGenes <- df$ENTREZ
+sigGenes <- na.exclude(sigGenes)
+```
+
+```{r, fig.width=10}
+TC_plots[[1]]+theme_classic(base_size = 24)+
+  scale_color_viridis(breaks=c(0.2,0.4,0.6,0.8),option = "C")
+```
+
+```{r, fig.width=12, fig.asp=0.3}
+kk <- enrichGO(gene = sigGenes, ont="BP", OrgDb = "org.Hs.eg.db")
+GO <- kk2foldchange(kk)
+
+if(length(GO$ID)>30){
+  GOsub <- GO[1:30,]
+}else{
+  GOsub <- GO[1:length(GO$ID),]
+}
+GO_ordered <- GOsub[order(GOsub$foldchange),]
+GO_ordered$foldchange <- as.numeric(GO_ordered$foldchange)
+GO_ordered$Description<- factor(GO_ordered$Description, levels = GO_ordered$Description[order(GO_ordered$foldchange, decreasing = FALSE)])
+
+GO_ordered <- GO_ordered[c(2,5,10,12,13),]
+```
+
+```{r, fig.width=12, fig.asp=0.4}
+(c1 <- my_GO_plot())
+```
+
+```{r}
+rm(list = setdiff(ls(), c("dds", "TPM", "TPM_long", "gene_symbol", "GO_smooth_line_plot", "TC_plots", "TC_res", "kk2foldchange", "my_GO_plot")))
+```
+
+## Supp. Figure 3 D
+
+```{r}
+df <- t(TPM[gene_symbol[c("APAF1", "XIAP")], 1:12]) 
+colnames(df) <- c("APAF1", "XIAP")
+df <- as.data.frame(df)
+df$timepoint_sample <- c("NPC_1", "d5_1", "d25_1", "d45_1", "NPC_2", "NPC_3", "d5_2", "d25_2", "d45_2","d5_3", "d25_3", "d45_3")
+df$timepoint <- c("NPC", "d5", "d25", "d45", "NPC", "NPC", "d5", "d25", "d45","d5", "d25", "d45")
+```
+
+```{r, fig.asp=0.8, fig.width=5, dev="svglite"}
+p <- mutate(df, timepoint=factor(timepoint,ordered=T, c("NPC", "d5", "d25", "d45")))
+
+APAF1 <- aggregate(p[, 1], list(p$timepoint), mean)
+APAF1_se <- aggregate(p[, 1], list(p$timepoint), sd)
+
+XIAP <- aggregate(p[, 2], list(p$timepoint), mean)
+XIAP_se <- aggregate(p[, 2], list(p$timepoint), sd)
+
+df2 <- data.frame(timepoint=ordered(c("NPC", "d5", "d25", "d45"), levels=c("NPC", "d5", "d25", "d45")), APAF1=APAF1$x, APAF1_se=APAF1_se$x, XIAP=XIAP$x, XIAP_se=XIAP_se$x)
+
+ggplot(NULL,  aes(x= as.numeric(timepoint)))+ 
+  geom_smooth(data=df2, aes(as.numeric(timepoint), APAF1, ymin = APAF1 - APAF1_se, ymax = APAF1 + APAF1_se, color="APAF1", fill="APAF1"), stat="identity")+
+  geom_smooth(data=df2, aes(as.numeric(timepoint), XIAP, ymin = XIAP - XIAP_se, ymax = XIAP + XIAP_se, color="XIAP", fill="XIAP"), stat="identity")+
+  scale_x_discrete(limits=c("NPC", "d5", "d25", "d45")) +
+  scale_y_log10()+ 
+  theme_classic(base_size = 28)+
+  theme(legend.title=element_blank(), 
+        axis.title.x = element_blank(),
+        legend.position = c(0.25, 0.9),
+        legend.text = element_text(face="italic"),
+        legend.background=element_blank())+
+  ylab("TPM")+
+  coord_cartesian(xlim = c(1,4.1), expand = FALSE)+
+  scale_colour_manual(name = 'Gene', values =c('APAF1'='red', 'XIAP'="#5FB568"), labels = c('APAF1', 'XIAP'), aesthetics = c("color", "fill"))
+```
+
+```{r}
+rm(list = setdiff(ls(), c("dds", "TPM", "TPM_long", "gene_symbol", "GO_smooth_line_plot", "TC_plots", "TC_res", "kk2foldchange", "my_GO_plot")))
+```
+
+## Supp. Figure 4 A
+
+```{r}
+tbl <- list.files(path = "../raw_data/featureCounts/", pattern = "*.tsv", full.names = T)
+counts <- map(tbl, read.table, header=T, comment.char="") %>% map(9)
+names(counts) <- c("mat1", "mat10", "mat11", "mat12", "mat2", "mat3", "mat4", "mat5", "mat6", "mat7", "mat8", "mat9")
+counts <- counts %>% as.data.frame()
+rownames(counts) <- read.table(tbl[1], header = T, comment.char = "")[,4] %>% substr(1,15)
+gene_symbol <- read.table(tbl[1], header = T, comment.char = "")[, 7] %>% as.vector()
+```
+
+```{r}
+tbl2 <- list.files(path = "../raw_data/featureCountsMS/", pattern = "*.tsv", full.names = T)
+counts2 <- map(tbl2, read.table, header=T, comment.char="") %>% map(9)
+names(counts2) <- c("CL28_1", "CL_28_2", "CL_68_1", "CL_69_1", "CL_69_2")
+counts2 <- counts2 %>% as.data.frame()
+rownames(counts2) <- read.table(tbl2[1], header = T, comment.char = "")[,4] %>% substr(1,15)
+gene_symbol <- read.table(tbl2[1], header = T, comment.char = "")[, 7] %>% as.vector()
+```
+
+`sample_info` contains information about the day of harvest and the batch of the regarding samples.
+
+```{r}
+sample_info <- data.frame(timepoint = c("d0", "d5","d25", "d45", "d0", "d0", "d5","d25", "d45", "d5","d25", "d45", "CL28_d28", "CL28_d28", "CL68_d28", "CL69_d28", "CL69_d28"), batch=c("progenitors","batch3","batch3","batch3","progenitors","progenitors","batch1","batch1","batch1","batch2","batch2","batch2", "batch4", "batch4", "batch4", "batch4", "batch4"), row.names = c(names(counts), names(counts2)))
+```
+
+combining datasets:
+
+```{r}
+counts <- cbind(counts, counts2)
+rm(counts2)
+```
+
+Creating the DESeqDataSet:
+
+```{r}
+dds2 <- DESeqDataSetFromMatrix(countData = counts, colData = sample_info, design = ~timepoint)
+featureData <- data.frame(gene_symbol=gene_symbol)
+mcols(dds2) <- DataFrame(mcols(dds2), featureData)
+```
+
+```{r}
+dds2 <- DESeq(dds2)
+```
+
+```{r}
+dds2@colData@listData$timepoint <- c("NPC", "d5", "d25", "d45", "NPC", "NPC", "d5", "d25", "d45", "d5", "d25", "d45", "CL28_d28", "CL28_d28", "CL68_d28", "CL69_d28", "CL69_d28")
+my_levels <- c("NPC", "d5", "d25", "d45", "CL28_d28","CL68_d28", "CL69_d28")
+dds2@colData@listData$timepoint <- factor(dds2@colData@listData$timepoint, levels = my_levels)
+```
+
+```{r}
+genes <- c("CASP1", "CASP2", "CASP3", "CASP6", "CASP7", "CASP8", "CASP10", 
+           "BAX", "BAK1", "BCL2", "BCL2L1", "BCL2L2", "MCL1", "BID", "BAD", "HRK", "BOK", "BCL2L11", "BBC3", "PMAIP1", "BMF", "APAF1", 
+           "PARK2", "PARK7", "PPARGC1A", "CYCS",
+           "BIRC2", "BIRC5", "AREL1", "XIAP", 
+           "HTRA2", "SIVA1", "SIAH1", "USP11", "PRKCE", 
+           "ATF4", "CEBPB", "SOD1", "SOD2", "XRCC2", "PARP2", "ATG7", "KPNA1", "KPNB1", "DEDD2")
+```
+
+```{r}
+ncounts1 <- dds2[dds2@rowRanges@elementMetadata@listData[["gene_symbol"]] %in% genes]
+ncounts <- counts(ncounts1, normalize=T)
+rownames(ncounts) <- ncounts1@rowRanges@elementMetadata@listData[["gene_symbol"]]
+colnames(ncounts) <- c("NPC_1", "d5_1", "d25_1", "d45_1", "NPC_2", "NPC_3", "d5_2", "d25_2", "d45_2","d5_3", "d25_3", "d45_3", "CL28_d28_1", "CL28_d28_2", "CL68_d28_1", "CL69_d28_1", "CL69_d28_2")
+ncounts <- ncounts[,c(1,5,6,2,7,10,3,8,11,4,9,12, 13,14,15,16,17)]
+ncounts <- ncounts[match(genes, rownames(ncounts)),]
+```
+
+```{r}
+my_zscale <- function(x){
+  M <- rowMeans(x, na.rm = TRUE)
+  nsamples <- ncol(x)
+  DF <- nsamples - 1L
+  IsNA <- is.na(x)
+  if (any(IsNA)) {
+    mode(IsNA) <- "integer"
+    DF <- DF - rowSums(IsNA)
+    DF[DF == 0L] <- 1L
+  }
+  x <- x - M
+  V <- rowSums(x^2L, na.rm = TRUE)/DF
+  x <- x/sqrt(V + 0.01)
+  out <- melt(x)
+  out
+}
+```
+
+```{r}
+ncounts_mean <- data.frame(NPCs=rowMeans(ncounts[, 1:3]), d5=rowMeans(ncounts[,4:6]), d25=rowMeans(ncounts[,7:9]), d45=rowMeans(ncounts[,10:12]), CL28_d28=rowMeans(ncounts[,13:14]), CL68_d28=ncounts[,15], CL69_d28= rowMeans(ncounts[,16:17 ]))
+```
+
+```{r}
+ncounts_mean <- as.matrix(ncounts_mean)
+zcounts <- my_zscale(ncounts_mean)
+```
+
+```{r, fig.asp=1.5, fig.width=10, dev="pdf"}
+lims <- c(min(zcounts$value), max(zcounts$value)) %>% max()
+ggplot(data = zcounts, aes(x=Var2, y=Var1, fill=value)) +
+  geom_tile()+
+  scale_fill_viridis_c(option="viridis", limits = c(-lims,lims), breaks=c(-2,0,2))+
+  scale_y_discrete(limits = rev(levels(zcounts$Var1)), position = "right")+
+  geom_hline(yintercept = c(10.5, 15.5, 19.5, 23.5, 38.5), col="white", size=2)+
+  theme_minimal(base_size=20)+
+  labs(fill="Z-Score", x="", y="")+
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5), axis.text.y = element_text(face = "italic"), legend.position="bottom", legend.key.width = unit(2,"cm"))
+  
+```
+
+## Supp. Figure 5 A
+
+```{r}
+driver <- c("NCOA4", "ATF4", "VDAC2", "VDAC3", "POR", "LPCAT3", "MAP1LC3B", "TFRC", "MAP1LC3A", "HMOX1", "YAP1", "EPAS1", "TF")
+suppressor <- c("GSS", "PROM2", "AIFM2", "FTL", "GPX4", "SLC3A2", "NFE2L2", "SLC7A11", "GCLC")
+```
+
+```{r}
+mat <- TPM[,1:12]
+gene_symbol <-rownames(mat)
+names(gene_symbol) <-  TPM$gene_name
+```
+
+### Ferroptosis Inducer:
+
+```{r}
+genes <- driver
+df <- t(mat[gene_symbol[genes], ]) 
+colnames(df) <- c(genes)
+df <- as.data.frame(df)
+
+all_na <- function(x) any(!is.na(x))
+
+df <- df %>% select_if(all_na)
+```
+
+```{r, fig.asp=0.7}
+GO_smooth_line_plot(df)
+```
+
+```{r}
+ncounts1 <- dds[dds@rowRanges@elementMetadata@listData[["gene_symbol"]] %in% genes]
+ncounts <- counts(ncounts1, normalize=T)
+rownames(ncounts) <- ncounts1@rowRanges@elementMetadata@listData[["gene_symbol"]]
+ncounts <- ncounts[, 1:12]
+colnames(ncounts) <- c("NPC_1", "d5_1", "d25_1", "d45_1", "NPC_2", "NPC_3", "d5_2", "d25_2", "d45_2","d5_3", "d25_3", "d45_3")
+ncounts <- ncounts[,c(1,5,6,2,7,10,3,8,11,4,9,12)]
+ncounts <- ncounts[match(genes, rownames(ncounts)),]
+```
+
+```{r}
+ncounts <- ncounts[match(genes, rownames(ncounts)),]
+NPC <- rowMeans(ncounts[,1:3])
+d5 <- rowMeans(ncounts[,4:6])
+d25 <- rowMeans(ncounts[,7:9])
+d45 <- rowMeans(ncounts[,10:12])
+av_ncounts <- cbind(NPC, d5,d25,d45)
+```
+
+```{r}
+zcounts <- my_zscale(av_ncounts)
+```
+
+```{r, fig.asp=1, fig.width=10, dev="pdf"}
+ggplot(data = zcounts, aes(x=Var2, y=Var1, fill=value)) +
+  geom_tile()+
+  scale_fill_viridis_c(option="viridis", limits = c(-1.5,1.5), breaks=c(-1.5,0,1.5))+
+  scale_y_discrete(limits = rev(levels(zcounts$Var1)))+
+  #geom_hline(yintercept = c(12.5,8.5), col="white", size=3)+
+  theme_minimal(base_size=30)+
+  labs(fill="Z-Score", x="", y="")+
+  theme(axis.text.x = element_text(angle = 0, vjust=0.5), axis.text.y = element_text(face = "italic"), legend.title = element_text(size = 24), legend.text = element_text(size = 20))+
+  scale_x_discrete(position = "top") 
+  
+```
+
+### Ferroptosis suppressor
+
+```{r}
+genes <- suppressor
+df <- t(mat[gene_symbol[genes], ]) 
+colnames(df) <- c(genes)
+df <- as.data.frame(df)
+
+all_na <- function(x) any(!is.na(x))
+
+df <- df %>% select_if(all_na)
+```
+
+```{r, fig.asp=0.7}
+GO_smooth_line_plot(df)
+```
+
+```{r}
+ncounts1 <- dds[dds@rowRanges@elementMetadata@listData[["gene_symbol"]] %in% genes]
+ncounts <- counts(ncounts1, normalize=T)
+rownames(ncounts) <- ncounts1@rowRanges@elementMetadata@listData[["gene_symbol"]]
+ncounts <- ncounts[, 1:12]
+colnames(ncounts) <- c("NPC_1", "d5_1", "d25_1", "d45_1", "NPC_2", "NPC_3", "d5_2", "d25_2", "d45_2","d5_3", "d25_3", "d45_3")
+ncounts <- ncounts[,c(1,5,6,2,7,10,3,8,11,4,9,12)]
+ncounts <- ncounts[match(genes, rownames(ncounts)),]
+```
+
+```{r}
+ncounts <- ncounts[match(genes, rownames(ncounts)),]
+NPC <- rowMeans(ncounts[,1:3])
+d5 <- rowMeans(ncounts[,4:6])
+d25 <- rowMeans(ncounts[,7:9])
+d45 <- rowMeans(ncounts[,10:12])
+av_ncounts <- cbind(NPC, d5,d25,d45)
+```
+
+```{r}
+zcounts <- my_zscale(av_ncounts)
+```
+
+```{r, fig.asp=1, fig.width=10}
+ggplot(data = zcounts, aes(x=Var2, y=Var1, fill=value)) +
+  geom_tile()+
+  scale_fill_viridis_c(option="viridis", limits = c(-1.5,1.5), breaks=c(-1.5,0,1.5))+
+  scale_y_discrete(limits = rev(levels(zcounts$Var1)))+
+  #geom_hline(yintercept = c(12.5,8.5), col="white", size=3)+
+  theme_minimal(base_size=30)+
+  labs(fill="Z-Score", x="", y="")+
+  theme(axis.text.x = element_text(angle = 0, vjust=0.5), axis.text.y = element_text(face = "italic"), legend.title = element_text(size = 24), legend.text = element_text(size = 20))+
+  scale_x_discrete(position = "top") 
+  
+```
+
+```{r}
+sessionInfo()
+```

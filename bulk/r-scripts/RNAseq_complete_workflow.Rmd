@@ -1,0 +1,138 @@
+---
+title: "Complete Data Analysis workflow for RNAseq data"
+author: "Anne Hoffrichter"
+date: "2020/11/26"
+output:
+  bookdown::html_document2:
+    code_folding: show
+    fig_caption: true
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: yes
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=80),tidy=TRUE, fig.asp=0.5, fig.width=6, warning = FALSE)
+```
+
+# Goal  
+
+Complete RNAseq data analysis workflow starting from feature counts. 
+
+# Approach   
+
+
+__Load libraries__
+```{r loadLibraries, message=FALSE, warning=FALSE}
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+library(tidyverse)
+library(DESeq2)
+library(purrr)
+library(pheatmap)
+library(viridis)
+library(TCseq)
+library(clusterProfiler)
+library(patchwork)
+library(neuMatIdx)
+library(limma)
+library(GO.db)
+set.seed(42)
+```
+
+Reading in data from Omics IT and Data Management Core Facility, German Cancer Research Center (DKFZ) (featureCounts). 
+
+```{r}
+# change file_path to directory of featureCounts
+tbl <- list.files(path = "../raw_data/featureCounts/", pattern = "*.tsv", full.names = T)
+counts <- map(tbl, read.table, header=T, comment.char="") %>% map(9)
+names(counts) <- c("mat1", "mat10", "mat11", "mat12", "mat2", "mat3", "mat4", "mat5", "mat6", "mat7", "mat8", "mat9")
+counts <- counts %>% as.data.frame()
+rownames(counts) <- read.table(tbl[1], header = T, comment.char = "")[,4] %>% substr(1,15)
+gene_symbol <- read.table(tbl[1], header = T, comment.char = "")[, 7] %>% as.vector()
+```
+
+`sample_info` contains information about the day of harvest and the batch of the regarding samples. 
+
+```{r}
+sample_info <- data.frame(timepoint = c("d0", "d5","d25", "d45", "d0", "d0", "d5","d25", "d45", "d5","d25", "d45"), batch=c("progenitors","batch3","batch3","batch3","progenitors","progenitors","batch1","batch1","batch1","batch2","batch2","batch2"), row.names = names(counts))
+```
+
+Creating the DESeqDataSet:
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = counts, colData = sample_info, design = ~timepoint)
+featureData <- data.frame(gene_symbol=gene_symbol)
+mcols(dds) <- DataFrame(mcols(dds), featureData)
+```
+
+Removing genes without any counts: 
+
+```{r}
+dds <- dds[rowSums(counts(dds))>0,]
+```
+
+## Differential expression analysis
+
+Using `DESeq()`on the raw data (with `estimatSizeFactors()`) is running the differential expression pipeline. It can also be used without performing `estimatSizeFactors()` before. The steps of `DESeq()` are: 
+
+- estimation of size factors (controlling the differences in the sequencing depth of the samples)
+- estimation of dispersion values for each gene
+- fitting a generalized linear model
+
+```{r}
+dds <- DESeq(dds)
+```
+
+```{r}
+d0d5 <- results(dds, contrast = c("timepoint", "d5", "d0"), alpha = 0.05)
+d0d5$gene_symbol <- mcols(dds)$gene_symbol
+d0d25 <- results(dds, contrast = c("timepoint", "d25", "d0"), alpha = 0.05)
+d0d25$gene_symbol <- mcols(dds)$gene_symbol
+d0d45 <- results(dds, contrast = c("timepoint", "d45", "d0"), alpha = 0.05)
+d0d45$gene_symbol <- mcols(dds)$gene_symbol
+
+d5d0 <- results(dds, contrast = c("timepoint", "d0", "d5"), alpha = 0.05)
+d5d0$gene_symbol <- mcols(dds)$gene_symbol
+d5d25 <- results(dds, contrast = c("timepoint", "d25", "d5"), alpha = 0.05)
+d5d25$gene_symbol <- mcols(dds)$gene_symbol
+d5d45 <- results(dds, contrast = c("timepoint", "d45", "d5"), alpha = 0.05)
+d5d45$gene_symbol <- mcols(dds)$gene_symbol
+
+d25d0 <- results(dds, contrast = c("timepoint", "d0", "d25"), alpha = 0.05)
+d25d0$gene_symbol <- mcols(dds)$gene_symbol
+d25d5 <- results(dds, contrast = c("timepoint", "d5", "d25"), alpha = 0.05)
+d25d5$gene_symbol <- mcols(dds)$gene_symbol
+d25d45 <- results(dds, contrast = c("timepoint", "d45", "d25"), alpha = 0.05)
+d25d45$gene_symbol <- mcols(dds)$gene_symbol
+
+d45d0 <- results(dds, contrast = c("timepoint", "d0", "d45"), alpha = 0.05)
+d45d0$gene_symbol <- mcols(dds)$gene_symbol
+d45d5 <- results(dds, contrast = c("timepoint", "d5", "d45"), alpha = 0.05)
+d45d5$gene_symbol <- mcols(dds)$gene_symbol
+d45d25 <- results(dds, contrast = c("timepoint", "d25", "d45"), alpha = 0.05)
+d45d25$gene_symbol <- mcols(dds)$gene_symbol
+
+res <- list(d0d5=d0d5,d0d25=d0d25,d0d45=d0d45,d5d0=d5d0,d5d25=d5d25,d5d45=d5d45,d25d0=d25d0,d25d5=d25d5,d25d45=d25d45,d45d0=d45d0,d45d5=d45d5,d45d25=d45d25)
+```
+
+```{r}
+dds@colData@listData$timepoint <- c("NPC", "d5", "d25", "d45", "NPC", "NPC", "d5", "d25", "d45", "d5", "d25", "d45")
+my_levels <- c("NPC", "d5", "d25", "d45")
+dds@colData@listData$timepoint <- factor(dds@colData@listData$timepoint, levels = my_levels)
+```
+
+```{r}
+saveRDS(res, "../data/res.rds")
+```
+
+```{r}
+saveRDS(dds, "../data/dds.rds")
+```
+
+
+```{r sessioninfo}
+sessionInfo()
+```
