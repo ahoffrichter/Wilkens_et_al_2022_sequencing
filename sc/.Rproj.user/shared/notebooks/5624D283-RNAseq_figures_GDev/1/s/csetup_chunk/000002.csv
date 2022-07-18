@@ -1,0 +1,1 @@
+"0","knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=80),tidy=TRUE, fig.asp=0.5, fig.width=6, warning = FALSE, dev=""svg"")"

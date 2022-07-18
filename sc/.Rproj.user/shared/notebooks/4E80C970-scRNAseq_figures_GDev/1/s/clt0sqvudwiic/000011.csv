@@ -1,0 +1,6 @@
+"0","df %>%
+  group_by(new_order) %>%
+  summarise(mean = mean(NMIoverall), sd=sd(NMIoverall))
+"
+"2","`summarise()` ungrouping output (override with `.groups` argument)
+"

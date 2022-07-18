@@ -1,0 +1,8 @@
+"0","design <- as.data.frame(colData(dds))"
+"0","design$sampleid <- rownames(design)"
+"0","design$group <- design$batch"
+"0","#design <- design[,c(1,4,5)]"
+"0",""
+"0","design$timepoint2 <- c(""NPC-1"", ""d5-1"", ""d25-1"", ""d45-1"", ""NPC-2"", ""NPC-3"", ""d5-2"", ""d25-2"", ""d45-2"", ""d5-3"", ""d25-3"", ""d45-3"")"
+"0","design$timepoint2 <- factor(design$timepoint2, levels = c(""NPC-1"", ""NPC-2"", ""NPC-3"", ""d5-1"", ""d5-2"", ""d5-3"", ""d25-1"", ""d25-2"", ""d25-3"", ""d45-1"", ""d45-2"", ""d45-3""))"
+"0","design <- design[,c(1,6,4,5)]"

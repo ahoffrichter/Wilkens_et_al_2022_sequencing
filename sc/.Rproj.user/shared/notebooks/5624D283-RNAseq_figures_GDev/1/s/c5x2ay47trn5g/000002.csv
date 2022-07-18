@@ -1,0 +1,2 @@
+"0","dds <- readRDS(""../data/dds.rds"")"
+"0","# res <- readRDS(""../data/res.rds"")"

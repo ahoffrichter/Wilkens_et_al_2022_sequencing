@@ -1,0 +1,6 @@
+"0","ens.str <- row.names(marker_c2)"
+"0","marker_c2$ENTREZ <- mapIds(org.Hs.eg.db,"
+"0","                     keys=ens.str,"
+"0","                     column=""ENTREZID"","
+"0","                     keytype=""SYMBOL"","
+"0","                     multiVals=""first"") "

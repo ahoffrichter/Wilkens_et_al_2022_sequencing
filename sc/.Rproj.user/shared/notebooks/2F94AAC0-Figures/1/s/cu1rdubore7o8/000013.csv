@@ -1,0 +1,4 @@
+"0","DimPlot(boost, cols=cols.cluster, pt.size = 2)+ "
+"0","  theme(axis.text=element_text(size=25), axis.title = element_text(size=30), plot.title=element_blank(), legend.text = element_text(size = 20))+"
+"0","  guides(colour = guide_legend(override.aes = list(size = 8)))+"
+"0","  scale_y_continuous(breaks=c(-5, 0,5))"

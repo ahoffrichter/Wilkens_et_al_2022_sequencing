@@ -1,0 +1,4 @@
+"0","pheatmap(sampleDistMatrix,"
+"0","         clustering_distance_rows = sampleDist,"
+"0","         clustering_distance_cols = sampleDist,"
+"0","         col = rev(plasma(255)), treeheight_col=0, treeheight_row = 100, border_color = NA)"

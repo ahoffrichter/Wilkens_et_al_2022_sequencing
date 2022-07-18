@@ -1,0 +1,9 @@
+"0","DoMultiBarHeatmap2(boost_subset, features = genes,group.by = ""pseudotime"", additional.group.by = ""ident"", draw.lines = FALSE, label=FALSE, cols.use = cols.use, raster = FALSE)+"
+"0","  scale_fill_viridis_c(option=""viridis"")+"
+"0","  NoLegend()+ "
+"0","  theme(axis.text=element_text(size=14,colour = ""black""), axis.text.y = element_text(face = ""italic""))+"
+"0","  scale_y_discrete(position = ""left"")+"
+"0","  geom_hline(yintercept = c(3.5, 9.5, 12.5, 16.5, 23.5, 27.5), color=""white"", size=1)"
+"2","Scale for 'fill' is already present. Adding another scale for 'fill', which will replace the
+existing scale.
+"

@@ -1,0 +1,6 @@
+"0","both_exp <- FetchData(boost, vars= c(""SLC17A7"", ""SLC17A6"", ""TBR1"", ""GAD1"", ""GAD2""), cells = intersect(Glut, GAB))"
+"0","both_exp <- data.frame(Glut=rowMeans(both_exp[,1:3]), Gaba=rowMeans(both_exp[,4:5]))"
+"0","both_exp$cell_id <- rownames(both_exp)"
+"0","both_exp <- both_exp %>% mutate(type=if_else(Glut>Gaba, ""Glut"", ""Gaba""))"
+"0","both_GAB <- filter(both_exp, type==""Gaba"")"
+"0","both_Glut <- filter(both_exp, type==""Glut"")"

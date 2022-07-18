@@ -1,0 +1,1 @@
+"0","tca <- timeclust(tca, algo = ""cm"", k = 12, standardize = TRUE)"

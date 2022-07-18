@@ -1,0 +1,6 @@
+"0","markers_c1 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==1) %>% pull(""gene"") %>% .[1:10]"
+"0","markers_c2 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==2) %>% pull(""gene"") %>% .[1:10]"
+"0","markers_c3 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==3) %>% pull(""gene"") %>% .[1:11]"
+"0","markers_c4 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==4) %>% pull(""gene"") %>% .[1:12]"
+"0","markers_c5 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==5) %>% pull(""gene"") %>% .[1:10]"
+"0","marker_list <- c(markers_c1, markers_c2, markers_c3, markers_c4, markers_c5)"

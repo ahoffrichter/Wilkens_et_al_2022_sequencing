@@ -1,0 +1,10 @@
+"0","boost[[""old.ident""]] <- Idents(object = boost)"
+"0","boost <- StashIdent(object = boost, save.name = ""old.ident"")"
+"2","With Seurat 3.X, stashing identity classes can be accomplished with the following:
+boost[[""old.ident""]] <- Idents(object = boost)
+"
+"0","Idents(object = boost, cells = GAB) <- ""Gaba"""
+"0","Idents(object = boost, cells = Glut) <- ""Glut"""
+"0","Rest <- WhichCells(boost, invert=TRUE, cells=c(GAB, Glut))"
+"0","Idents(object = boost, cells = Rest) <- ""rest"""
+"0","DimPlot(boost)"

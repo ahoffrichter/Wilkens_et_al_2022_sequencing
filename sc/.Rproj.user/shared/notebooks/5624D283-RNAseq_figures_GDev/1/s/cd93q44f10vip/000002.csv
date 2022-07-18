@@ -1,0 +1,4 @@
+"0","tbl <- list.files(path =""../raw_data/featureCounts/"", pattern = ""*.tsv"", full.names = T)"
+"0","l <- read.table(tbl[1], header=T, comment.char = """")"
+"0","l <- l[,c(1,2,3,4,7)]"
+"0","l$gene_id <- l$gene_id%>% substr(1,15)"

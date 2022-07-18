@@ -1,0 +1,4 @@
+"0","GAB <- setdiff(GAB, Glut)"
+"0","GAB <- c(GAB, both_GAB$cell_id)"
+"0","Glut <- setdiff(Glut, GAB)"
+"0","Glut <- c(Glut, both_Glut$cell_id)"

@@ -1,0 +1,2 @@
+"0","GO_sub <- filter(GO, Description %in% cc_filter)"
+"0","GO_sub <- GO_sub[match(cc_filter, GO_sub$Description),]"

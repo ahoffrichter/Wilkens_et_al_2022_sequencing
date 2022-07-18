@@ -1,0 +1,2 @@
+"0","tca <- timecourseTable(tca, value = ""expression"", norm.method = ""rpkm"", filter = TRUE)"
+"0","t <- tcTable(tca)"

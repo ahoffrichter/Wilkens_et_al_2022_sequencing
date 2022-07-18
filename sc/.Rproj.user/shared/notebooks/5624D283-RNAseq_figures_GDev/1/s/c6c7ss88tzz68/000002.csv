@@ -1,0 +1,3 @@
+"0","# Vector for time point colors"
+"0","cc <- c(""#F7E51D"", ""#38AF7A"", ""#34618D"",  ""#41235A"")"
+"0","names(cc) <- c(""NPC"", ""d5"", ""d25"", ""d45"")"

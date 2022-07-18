@@ -1,0 +1,3 @@
+"0","GAD1 <- WhichCells(boost, expression = GAD1 > 0)"
+"0","GAD2 <- WhichCells(boost, expression = GAD2 > 0)"
+"0","GAB <- union(GAD1, GAD2)"

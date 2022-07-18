@@ -1,0 +1,6 @@
+"0","ggplot(d, aes(PC1, PC2, color=timepoint))+ "
+"0","  geom_point(size=10)+"
+"0","  xlab(paste0(""PC1: "",percentVar[1],""% variance"")) + "
+"0","  theme_gray(base_size = 24)+"
+"0","  scale_color_manual(values=m)+"
+"0","  ylab(paste0(""PC2: "",percentVar[2],""% variance"")) "

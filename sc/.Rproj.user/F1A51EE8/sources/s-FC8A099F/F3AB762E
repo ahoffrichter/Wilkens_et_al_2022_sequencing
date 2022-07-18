@@ -1,0 +1,26 @@
+{
+    "id": "F3AB762E",
+    "path": "~/Desktop/RNA_seq_projects/RW-publication/github/sc/r-scripts/scRNAseq_complete_workflow.Rmd",
+    "project_path": "r-scripts/scRNAseq_complete_workflow.Rmd",
+    "type": "r_markdown",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1657805655626.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "325,0",
+        "scrollLine": "318"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1657806028,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1657806028765,
+    "read_only": false,
+    "read_only_alternatives": []
+}

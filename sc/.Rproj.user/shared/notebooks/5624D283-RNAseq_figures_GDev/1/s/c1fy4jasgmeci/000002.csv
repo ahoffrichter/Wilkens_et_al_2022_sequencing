@@ -1,0 +1,4 @@
+"0","go_id = GOID( GOTERM[ Term(GOTERM) == ""execution phase of apoptosis""])"
+"0","allegs <- get(go_id, org.Hs.egGO2ALLEGS)"
+"0","genes <- unlist(mget(allegs, org.Hs.egSYMBOL))"
+"0","genes <- unique(genes)"

@@ -1,0 +1,1068 @@
+---
+title: "Figures for scRNAseq data"
+author: "Anne Hoffrichter"
+date: "2021/01/22"
+output:
+  bookdown::html_document2:
+    code_folding: show
+    fig_caption: true
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: yes
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=80),tidy=TRUE, fig.asp=1, fig.width=6, warning = FALSE, dev = "svg")
+```
+
+# Goal
+
+Preparation of figures for publication
+
+# Approach
+
+```{r loadLibraries, message=FALSE, warning=FALSE}
+library(Seurat)
+library(viridis)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+library(tidyverse)
+library(purrr)
+library(patchwork)
+library(grid)
+library(clusterProfiler)
+set.seed(42)
+```
+
+```{r, message=FALSE}
+boost <- readRDS("../data/boost_data_seurat.rds")
+cds <- readRDS("../data/boost_data_cds.rds")
+```
+
+# Figures
+
+```{r}
+cols.cluster <-  hcl.colors(6, "Spectral") %>% rev()
+cols.cluster <- cols.cluster[c(1,3,4,5,6,2)]
+```
+
+## Figure 1 F: Dimensional reduction plot in UMAP space, cells colored by cluster membership, or pseudotime
+
+```{r, fig.asp=1, fig.width=8}
+DimPlot(boost, cols=cols.cluster, pt.size = 2)+ 
+  theme(axis.text=element_text(size=25), axis.title = element_text(size=30), plot.title=element_blank(), legend.text = element_text(size = 20))+
+  guides(colour = guide_legend(override.aes = list(size = 8)))+
+  scale_y_continuous(breaks=c(-5, 0,5))
+```
+
+```{r, fig.asp=1, fig.width=8}
+FeaturePlot(boost, features = "pseudotime", cols=plasma(length(boost$pseudotime)), pt.size = 2)+ 
+  theme(axis.text=element_text(size=25), axis.title = element_text(size=30), plot.title=element_blank(), legend.text = element_text(size = 20), legend.key.size = unit(0.8, "cm"))+
+  scale_y_continuous(breaks=c(-5, 0,5))
+```
+
+## Figure 1 G: Heatmap of specific marker genes. Cells are ordered by pseudotime, with an additional colorbar for the respective cluster.
+
+```{r}
+genes <- c("MKI67", "SOX2", "HES1", "HES5", "NES", "PAX6", "TUBB3", "STMN1", "FAT3", "DCX", "RBFOX3", "MAPT", "SNAP25", "CAMK2A", "CAMK4", "NRXN1", "NCAM1", "DLG4", "SYP", "SYN1", "SYT1", "ANK3", "SPTBN4", "SCN2A", "GRIN1", "GRIN2B", "GRIA1", "GRIA2", "GABRA3", "GABRB2", "ARC", "NPAS4", "FOXG1")
+```
+
+```{r}
+DoMultiBarHeatmap2 <- function(object, features = NULL, cells = NULL, group.by = "ident",
+                              additional.group.by = NULL, additional.group.sort.by = NULL, cols.use = NULL,
+                              group.bar = TRUE, disp.min = -2.5, disp.max = NULL, slot = "scale.data", assay = NULL,
+                              label = TRUE, size = 5.5, hjust = 0, angle = 45, raster = TRUE, draw.lines = TRUE,
+                              lines.width = NULL, group.bar.height = 0.02, combine = TRUE, group.name=NULL, additional.group.name=NULL) {
+  cells <- cells %||% colnames(x = object)
+  if (is.numeric(x = cells)) {
+    cells <- colnames(x = object)[cells]
+  }
+  assay <- assay %||% DefaultAssay(object = object)
+  DefaultAssay(object = object) <- assay
+  features <- features %||% VariableFeatures(object = object)
+  features <- rev(x = unique(x = features))
+  disp.max <- disp.max %||% ifelse(test = slot == "scale.data", yes = 2.5, no = 6)
+  possible.features <- rownames(x = GetAssayData(object = object, slot = slot))
+  if (any(!features %in% possible.features)) {
+    bad.features <- features[!features %in% possible.features]
+    features <- features[features %in% possible.features]
+    if (length(x = features) == 0) {
+      stop("No requested features found in the ", slot, " slot for the ", assay,
+           " assay.")
+    }
+    warning("The following features were omitted as they were not found in the ",
+            slot, " slot for the ", assay, " assay: ", paste(bad.features, collapse = ", "))
+  }
+
+  if (!is.null(additional.group.sort.by)) {
+    if (any(!additional.group.sort.by %in% additional.group.by)) {
+      bad.sorts <- additional.group.sort.by[!additional.group.sort.by %in%
+                                              additional.group.by]
+      additional.group.sort.by <- additional.group.sort.by[additional.group.sort.by %in%
+                                                             additional.group.by]
+      if (length(x = bad.sorts) > 0) {
+        warning("The following additional sorts were omitted as they were not a subset of additional.group.by : ",
+                paste(bad.sorts, collapse = ", "))
+      }
+    }
+  }
+
+  data <- as.data.frame(x = as.matrix(x = t(x = GetAssayData(object = object, slot = slot)[features,
+                                                                                           cells, drop = FALSE])))
+
+  object <- suppressMessages(expr = StashIdent(object = object, save.name = "ident"))
+  group.by <- group.by %||% "ident"
+  groups.use <- object[[c(group.by, additional.group.by[!additional.group.by %in%
+                                                          group.by])]][cells, , drop = FALSE]
+  plots <- list()
+  for (i in group.by) {
+    data.group <- data
+    if (!is_null(additional.group.by)) {
+      additional.group.use <- additional.group.by[additional.group.by != i]
+      if (!is_null(additional.group.sort.by)) {
+        additional.sort.use = additional.group.sort.by[additional.group.sort.by !=
+                                                         i]
+      } else {
+        additional.sort.use = NULL
+      }
+    } else {
+      additional.group.use = NULL
+      additional.sort.use = NULL
+    }
+
+    group.use <- groups.use[, c(i, additional.group.use), drop = FALSE]
+
+    for (colname in colnames(group.use)) {
+      if (!is.factor(x = group.use[[colname]])) {
+        group.use[[colname]] <- factor(x = group.use[[colname]])
+      }
+    }
+
+    if (draw.lines) {
+      lines.width <- lines.width %||% ceiling(x = nrow(x = data.group) * 0.0025)
+      placeholder.cells <- sapply(X = 1:(length(x = levels(x = group.use[[i]])) *
+                                           lines.width), FUN = function(x) {
+                                             return(Seurat:::RandomName(length = 20))
+                                           })
+      placeholder.groups <- data.frame(rep(x = levels(x = group.use[[i]]),
+                                           times = lines.width))
+      group.levels <- list()
+      group.levels[[i]] = levels(x = group.use[[i]])
+      for (j in additional.group.use) {
+        group.levels[[j]] <- levels(x = group.use[[j]])
+        placeholder.groups[[j]] = NA
+      }
+
+      colnames(placeholder.groups) <- colnames(group.use)
+      rownames(placeholder.groups) <- placeholder.cells
+
+      group.use <- sapply(group.use, as.vector)
+      rownames(x = group.use) <- cells
+
+      group.use <- rbind(group.use, placeholder.groups)
+
+      for (j in names(group.levels)) {
+        group.use[[j]] <- factor(x = group.use[[j]], levels = group.levels[[j]])
+      }
+
+      na.data.group <- matrix(data = NA, nrow = length(x = placeholder.cells),
+                              ncol = ncol(x = data.group), dimnames = list(placeholder.cells, colnames(x = data.group)))
+      data.group <- rbind(data.group, na.data.group)
+    }
+
+    order_expr <- paste0("order(", paste(c(i, additional.sort.use), collapse = ","),
+                         ")")
+    group.use = with(group.use, group.use[eval(parse(text = order_expr)), , drop = F])
+
+    plot <- Seurat:::SingleRasterMap(data = data.group, raster = raster, disp.min = disp.min,
+                                     disp.max = disp.max, feature.order = features, cell.order = rownames(x = group.use),
+                                     group.by = group.use[[i]])
+
+    if (group.bar) {
+      pbuild <- ggplot_build(plot = plot)
+      group.use2 <- group.use
+      cols <- list()
+      na.group <- Seurat:::RandomName(length = 20)
+      for (colname in rev(x = colnames(group.use2))) {
+        if (colname == i) {
+          colid = group.name
+        } else {
+          colid = additional.group.name
+        }
+
+        # Default
+        cols[[colname]] <- c((scales::hue_pal())(length(x = levels(x = group.use[[colname]]))))
+
+        # Overwrite if better value is provided
+        if (!is_null(cols.use[[colname]])) {
+          req_length = length(x = levels(group.use))
+          if (length(cols.use[[colname]]) < req_length) {
+            warning("Cannot use provided colors for ", colname, " since there aren't enough colors.")
+          } else {
+            if (!is_null(names(cols.use[[colname]]))) {
+              if (all(levels(group.use[[colname]]) %in% names(cols.use[[colname]]))) {
+                cols[[colname]] <- as.vector(cols.use[[colname]][levels(group.use[[colname]])])
+              } else {
+                warning("Cannot use provided colors for ", colname, " since all levels (",
+                        paste(levels(group.use[[colname]]), collapse = ","), ") are not represented.")
+              }
+            } else {
+              cols[[colname]] <- as.vector(cols.use[[colname]])[c(1:length(x = levels(x = group.use[[colname]])))]
+            }
+          }
+        }
+
+        # Add white if there's lines
+        if (draw.lines) {
+          levels(x = group.use2[[colname]]) <- c(levels(x = group.use2[[colname]]),
+                                                 na.group)
+          group.use2[placeholder.cells, colname] <- na.group
+          cols[[colname]] <- c(cols[[colname]], "#FFFFFF")
+        }
+        names(x = cols[[colname]]) <- levels(x = group.use2[[colname]])
+
+        y.range <- diff(x = pbuild$layout$panel_params[[1]]$y.range)
+        y.pos <- max(pbuild$layout$panel_params[[1]]$y.range) + y.range *
+          0.015
+        y.max <- y.pos + group.bar.height * y.range
+        pbuild$layout$panel_params[[1]]$y.range <- c(pbuild$layout$panel_params[[1]]$y.range[1],
+                                                     y.max)
+
+        plot <- suppressMessages(plot + annotation_raster(raster = t(x = cols[[colname]][group.use2[[colname]]]),
+                                                          xmin = -Inf, xmax = Inf, ymin = y.pos, ymax = y.max) + annotation_custom(grob = grid::textGrob(label = colid,
+                                                                                                                                                         hjust = 0, gp = gpar(cex = 0.75)), ymin = mean(c(y.pos, y.max)),
+                                                                                                                                   ymax = mean(c(y.pos, y.max)), xmin = Inf, xmax = Inf) + coord_cartesian(ylim = c(0,
+                                                                                                                                                                                                                    y.max), clip = "off"))
+
+        if ((colname == i) && label) {
+          x.max <- max(pbuild$layout$panel_params[[1]]$x.range)
+          x.divs <- pbuild$layout$panel_params[[1]]$x.major %||% pbuild$layout$panel_params[[1]]$x$break_positions()
+          group.use$x <- x.divs
+          label.x.pos <- tapply(X = group.use$x, INDEX = group.use[[colname]],
+                                FUN = median) * x.max
+          label.x.pos <- data.frame(group = names(x = label.x.pos), label.x.pos)
+          plot <- plot + geom_text(stat = "identity", data = label.x.pos,
+                                   aes_string(label = "group", x = "label.x.pos"), y = y.max + y.max *
+                                     0.03 * 0.5, angle = angle, hjust = hjust, size = size)
+          plot <- suppressMessages(plot + coord_cartesian(ylim = c(0, y.max +
+                                                                     y.max * 0.002 * max(nchar(x = levels(x = group.use[[colname]]))) *
+                                                                     size), clip = "off"))
+        }
+      }
+    }
+    plot <- plot + theme(line = element_blank())
+    plots[[i]] <- plot
+  }
+  if (combine) {
+    plots <- CombinePlots(plots = plots)
+  }
+  return(plots)
+}
+```
+
+```{r, fig.asp=0.5, fig.width=12, dev="pdf"}
+boost_subset <- subset(boost, new_order %in% c("1", "2", "3", "4", "5"))
+cols.use <- list(pseudotime=plasma(length(boost_subset$pseudotime)), ident=cols.cluster)
+```
+
+
+```{r, fig.asp=0.5, fig.width=12, dev="pdf"}
+DoMultiBarHeatmap2(boost_subset, features = genes,group.by = "pseudotime", additional.group.by = "ident", draw.lines = FALSE, label=FALSE, cols.use = cols.use, raster = FALSE)+
+  scale_fill_viridis_c(option="viridis")+
+  NoLegend()+ 
+  theme(axis.text=element_text(size=14,colour = "black"))+
+  scale_y_discrete(position = "left")+
+  geom_hline(yintercept = c(3.5, 9.5, 12.5, 16.5, 23.5, 27.5), color="white", size=1)
+
+# DoHeatmap(boost_subset, features = genes, group.by="ident", draw.lines = FALSE, label=FALSE, raster = FALSE)+
+#   scale_fill_viridis_c(option="viridis")+
+#   theme(legend.text = element_text(size = 20), legend.key.size = unit(0.8, "cm"), legend.text.align = 1, legend.title = element_text(size=30))
+
+```
+
+
+## Figure 1 H: NMI scores per cluster of neuronal cells.
+
+```{r}
+sub <- subset(boost, idents=c("2", "3", "4", "5"))
+```
+
+```{r}
+a <- VlnPlot(sub, features = "NMIoverall", pt.size = 0.1, cols = cols.cluster[2:5])+
+  NoLegend()+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ggtitle("NMI")+
+  ylab("")
+b <- VlnPlot(sub, features = "NMIdiscriminable", pt.size = 0.1, cols = cols.cluster[2:5])+
+  NoLegend()+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ggtitle("Discriminating NMI")+
+  ylab("")
+c <- VlnPlot(sub, features = "NMIactivity", pt.size = 0.1, cols = cols.cluster[2:5])+
+  NoLegend()+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ggtitle("Functionality index")+
+  ylab("")
+```
+
+```{r, fig.asp=1.8, fig.width=4}
+# pw <- (a/b/c)&theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=25))&xlab("")
+```
+
+```{r, fig.asp=1.8, fig.width=4}
+# pw&theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=22))&xlab("")&ylab("")
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+b+
+  scale_y_continuous(breaks=c(0.49, 0.52, 0.55))
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+c
+```
+
+## Figure 2 D: Violin Plots of CASP9, CASP3, CASP7
+
+```{r}
+genes <- c("CASP7", "CASP9","CASP3")
+```
+
+```{r}
+p <- VlnPlot(boost_subset, features = genes, group.by = "new_order", pt.size = 0.1, cols=cols.cluster, combine=F)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+#patchwork <- wrap_plots(p, byrow = T)
+```
+
+### CASP9
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[2]]+
+  scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### CASP3
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[3]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### CASP7
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+## Figure 2 I: Violin Plots BAX, BCL2, BAK1
+
+```{r}
+genes <- c("BAX", "BCL2", "BAK1")
+```
+
+```{r}
+p <- VlnPlot(boost_subset, features = genes, group.by = "new_order", pt.size = 0.1, cols=cols.cluster)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+```
+
+### BAX
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### BCL2
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[2]]+
+  scale_y_continuous(breaks=c(0.0, 0.4, 0.8, 1.2))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### BAK1
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[3]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+## Figure 2 M: Violin Plot CYCS
+
+```{r}
+genes <- "CYCS"
+```
+
+```{r}
+p <- VlnPlot(boost_subset, features = genes, group.by = "new_order", pt.size = 0.1, cols=cols.cluster)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+## Figure 3 C: Violin Plots BIRC2, BIRC5, AREL1, BIRC4 (XIAP)
+
+```{r}
+genes <- c("BIRC2", "XIAP", "BIRC5",  "AREL1")
+```
+
+```{r}
+p <- VlnPlot(boost_subset, features = genes, group.by = "new_order", pt.size = 0.1, cols=cols.cluster, combine=F)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+```
+
+### BIRC2
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### BIRC5
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[3]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### AREL1
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[4]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### XIAP/BIRC4
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[2]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+## Figure 3 F: Violin Plots HTRA2, SIVA1, SIAH1
+
+```{r}
+genes <- c("HTRA2", "SIVA1", "SIAH1", "USP11")
+```
+
+```{r}
+p <- VlnPlot(boost_subset, features = genes, group.by = "new_order", pt.size = 0.1, cols=cols.cluster)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+```
+
+### HTRA2
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### SIVA1
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[2]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### SIAH1
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[3]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+## Figure 3 G: Violin Plot USP11
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[4]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+
+
+## Supplementary Figure 1 H: Pseudotime trajectories calculated on the per cell expression values for specific genes.
+
+```{r}
+my_plot_genes <- function (cds_subset, min_expr = NULL, cell_size = 0.75, nrow = NULL,
+                           ncol = 1, panel_order = NULL, color_cells_by = "pseudotime",
+                           trend_formula = "~ splines::ns(pseudotime, df=3)", label_by_short_name = TRUE,
+                           vertical_jitter = NULL, horizontal_jitter = NULL, line.size=NULL)
+{
+  assertthat::assert_that(methods::is(cds_subset, "cell_data_set"))
+  tryCatch({
+    pseudotime(cds_subset)
+  }, error = function(x) {
+    stop(paste("No pseudotime calculated. Must call order_cells first."))
+  })
+  colData(cds_subset)$pseudotime <- pseudotime(cds_subset)
+  if (!is.null(min_expr)) {
+    assertthat::assert_that(assertthat::is.number(min_expr))
+  }
+  assertthat::assert_that(assertthat::is.number(cell_size))
+  if (!is.null(nrow)) {
+    assertthat::assert_that(assertthat::is.count(nrow))
+  }
+  assertthat::assert_that(assertthat::is.count(ncol))
+  assertthat::assert_that(is.logical(label_by_short_name))
+  if (label_by_short_name) {
+    assertthat::assert_that("gene_short_name" %in% names(rowData(cds_subset)),
+                            msg = paste("When label_by_short_name = TRUE,", "rowData must have a column of gene",
+                                        "names called gene_short_name."))
+  }
+  assertthat::assert_that(color_cells_by %in% c("cluster",
+                                                "partition") | color_cells_by %in% names(colData(cds_subset)),
+                          msg = paste("color_cells_by must be a column in the",
+                                      "colData table."))
+  if (!is.null(panel_order)) {
+    if (label_by_short_name) {
+      assertthat::assert_that(all(panel_order %in% rowData(cds_subset)$gene_short_name))
+    }
+    else {
+      assertthat::assert_that(all(panel_order %in% row.names(rowData(cds_subset))))
+    }
+  }
+  assertthat::assert_that(nrow(rowData(cds_subset)) <= 100,
+                          msg = paste("cds_subset has more than 100 genes -", "pass only the subset of the CDS to be",
+                                      "plotted."))
+  assertthat::assert_that(methods::is(cds_subset, "cell_data_set"))
+  assertthat::assert_that("pseudotime" %in% names(colData(cds_subset)),
+                          msg = paste("pseudotime must be a column in", "colData. Please run order_cells",
+                                      "before running", "plot_genes_in_pseudotime."))
+  if (!is.null(min_expr)) {
+    assertthat::assert_that(assertthat::is.number(min_expr))
+  }
+  assertthat::assert_that(assertthat::is.number(cell_size))
+  assertthat::assert_that(!is.null(size_factors(cds_subset)))
+  if (!is.null(nrow)) {
+    assertthat::assert_that(assertthat::is.count(nrow))
+  }
+  assertthat::assert_that(assertthat::is.count(ncol))
+  assertthat::assert_that(is.logical(label_by_short_name))
+  if (label_by_short_name) {
+    assertthat::assert_that("gene_short_name" %in% names(rowData(cds_subset)),
+                            msg = paste("When label_by_short_name = TRUE,", "rowData must have a column of gene",
+                                        "names called gene_short_name."))
+  }
+  assertthat::assert_that(color_cells_by %in% c("cluster",
+                                                "partition") | color_cells_by %in% names(colData(cds_subset)),
+                          msg = paste("color_cells_by must be a column in the",
+                                      "colData table."))
+  if (!is.null(panel_order)) {
+    if (label_by_short_name) {
+      assertthat::assert_that(all(panel_order %in% rowData(cds_subset)$gene_short_name))
+    }
+    else {
+      assertthat::assert_that(all(panel_order %in% row.names(rowData(cds_subset))))
+    }
+  }
+  assertthat::assert_that(nrow(rowData(cds_subset)) <= 100,
+                          msg = paste("cds_subset has more than 100 genes -", "pass only the subset of the CDS to be",
+                                      "plotted."))
+  f_id <- NA
+  Cell <- NA
+  cds_subset = cds_subset[, is.finite(colData(cds_subset)$pseudotime)]
+
+
+  cds_exprs <- SingleCellExperiment::counts(cds_subset)
+  cds_exprs <- Matrix::t(Matrix::t(cds_exprs)/size_factors(cds_subset))
+  cds_exprs <- reshape2::melt(round(as.matrix(cds_exprs)))
+  if (is.null(min_expr)) {
+    min_expr <- 0
+  }
+  colnames(cds_exprs) <- c("f_id", "Cell", "expression")
+  cds_colData <- colData(cds_subset)
+  cds_rowData <- rowData(cds_subset)
+
+  cds_exprs <- as.data.frame(merge(cds_exprs, cds_rowData, by.x = "f_id",
+                                   by.y = "row.names"))
+
+
+  cds_exprs <- as.data.frame(merge(cds_exprs, cds_colData, by.x = "Cell",
+                                   by.y = "row.names"))
+
+
+
+  cds_exprs$adjusted_expression <- cds_exprs$expression
+  if (label_by_short_name == TRUE) {
+    if (is.null(cds_exprs$gene_short_name) == FALSE) {
+      cds_exprs$feature_label <- as.character(cds_exprs$gene_short_name)
+      cds_exprs$feature_label[is.na(cds_exprs$feature_label)] <- cds_exprs$f_id
+    }
+    else {
+      cds_exprs$feature_label <- cds_exprs$f_id
+    }
+  }else {
+    cds_exprs$feature_label <- cds_exprs$f_id
+  }
+  cds_exprs$f_id <- as.character(cds_exprs$f_id)
+  cds_exprs$feature_label <- factor(cds_exprs$feature_label)
+  new_data <- data.frame(pseudotime = colData(cds_subset)$pseudotime)
+  model_tbl = fit_models(cds_subset, model_formula_str = trend_formula)
+  model_expectation <- model_predictions(model_tbl, new_data = colData(cds_subset))
+  colnames(model_expectation) <- colnames(cds_subset)
+  expectation <- plyr::ddply(cds_exprs, plyr::.(f_id, Cell),
+                             function(x) {
+                               data.frame(expectation = model_expectation[x$f_id,
+                                                                          x$Cell])
+                             })
+  cds_exprs <- merge(cds_exprs, expectation)
+  cds_exprs$expression[cds_exprs$expression < min_expr] <- min_expr
+  cds_exprs$expectation[cds_exprs$expectation < min_expr] <- min_expr
+  if (!is.null(panel_order)) {
+    cds_exprs$feature_label <- factor(cds_exprs$feature_label,
+                                      levels = panel_order)
+  }
+  q <- ggplot(aes(pseudotime, expression), data = cds_exprs)
+  if (!is.null(color_cells_by)) {
+    q <- q + geom_point(aes_string(color = color_cells_by),
+                        size = I(cell_size), position = position_jitter(horizontal_jitter,
+                                                                        vertical_jitter))
+    if (class(colData(cds_subset)[, color_cells_by]) == "numeric") {
+      q <- q + viridis::scale_color_viridis(option = "C")
+    }
+  }else {
+    q <- q + geom_point(size = I(cell_size), position = position_jitter(horizontal_jitter,
+                                                                        vertical_jitter))
+  }
+  q <- q + geom_line(aes(x = pseudotime, y = expectation),
+                     data = cds_exprs, size=line.size)
+  q <- q + scale_y_log10() + facet_wrap(~feature_label, nrow = nrow,
+                                        ncol = ncol, scales = "free_y")
+  if (min_expr < 1) {
+    q <- q + expand_limits(y = c(min_expr, 1))
+  }
+  q <- q + ylab("Expression")
+  q <- q + xlab("pseudotime")
+  #q <- q + monocle_theme_opts()
+  q
+}
+```
+
+```{r}
+genes <- c("SOX2", "NES", "TUBB3", "DCX", "SNAP25", "SYN1")
+cds_subset <- cds[,SummarizedExperiment::colData(cds)$ident %in% c("1", "2", "3", "4", "5")]
+```
+
+```{r, fig.asp=0.5, fig.width=12}
+lineage_cds <- cds_subset[rowData(cds_subset)$gene_short_name %in% "SOX2",]
+p <- list()
+p[[1]] <- my_plot_genes(lineage_cds, color_cells_by="new_order", cell_size = 4, line.size=2)+
+  theme_grey(base_size = 40,)+
+  NoLegend()+
+  scale_color_manual(values=c("#584B9F", "#BAEEAE", "#FCDE85", "#ED820A", "#A71B4B"))+
+  theme(axis.title=element_blank(),
+        axis.text.x=element_blank(), strip.background = element_rect(fill = "white", colour = NA))+
+  scale_y_log10(breaks=c(0.01,0.1,1,10), labels=c("0.01","0.1","1","10"))
+```
+
+```{r, fig.asp=0.5, fig.width=12}
+lineage_cds <- cds_subset[rowData(cds_subset)$gene_short_name %in% "NES",]
+
+p[[2]] <- my_plot_genes(lineage_cds, color_cells_by="new_order", cell_size = 4, line.size=2)+theme_grey(base_size = 40)+NoLegend()+scale_color_manual(values=c("#584B9F", "#BAEEAE", "#FCDE85", "#ED820A", "#A71B4B"))+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(), strip.background = element_rect(fill = "white", colour = NA))
+```
+
+```{r, fig.asp=0.5, fig.width=12}
+lineage_cds <- cds_subset[rowData(cds_subset)$gene_short_name %in% "TUBB3",]
+
+p[[3]] <- my_plot_genes(lineage_cds, color_cells_by="new_order", cell_size = 4, line.size=2)+theme_grey(base_size = 40)+NoLegend()+scale_color_manual(values=c("#584B9F", "#BAEEAE", "#FCDE85", "#ED820A", "#A71B4B"))+
+  theme(axis.title=element_blank(),strip.background = element_rect(fill = "white", colour = NA))
+```
+
+```{r, fig.asp=0.5, fig.width=12}
+lineage_cds <- cds_subset[rowData(cds_subset)$gene_short_name %in% "DCX",]
+
+p[[4]] <- my_plot_genes(lineage_cds, color_cells_by="new_order", cell_size = 4, line.size=2)+theme_grey(base_size = 40)+NoLegend()+scale_color_manual(values=c("#584B9F", "#BAEEAE", "#FCDE85", "#ED820A", "#A71B4B"))+
+  theme(axis.title=element_blank(),
+        axis.text.x=element_blank(), strip.background = element_rect(fill = "white", colour = NA))
+```
+
+```{r, fig.asp=0.5, fig.width=12}
+lineage_cds <- cds_subset[rowData(cds_subset)$gene_short_name %in% "SNAP25",]
+
+p[[5]] <- my_plot_genes(lineage_cds, color_cells_by="new_order", cell_size = 4, line.size=2)+theme_grey(base_size = 40)+NoLegend()+scale_color_manual(values=c("#584B9F", "#BAEEAE", "#FCDE85", "#ED820A", "#A71B4B"))+
+  theme(axis.title=element_blank(),
+        axis.text.x=element_blank(), strip.background = element_rect(fill = "white", colour = NA))
+```
+
+```{r, fig.asp=0.5, fig.width=12}
+lineage_cds <- cds_subset[rowData(cds_subset)$gene_short_name %in% "SYN1",]
+
+p[[6]] <- my_plot_genes(lineage_cds, color_cells_by="new_order", cell_size = 4, line.size=2)+theme_grey(base_size = 40)+NoLegend()+scale_color_manual(values=c("#584B9F", "#BAEEAE", "#FCDE85", "#ED820A", "#A71B4B"))+
+  theme(axis.title=element_blank(), strip.background = element_rect(fill = "white", colour = NA))
+```
+
+```{r, fig.asp=0.95, fig.width=12}
+wrap_plots(p[1:3], ncol=1)
+```
+
+```{r, fig.asp=0.95, fig.width=12}
+wrap_plots(p[4:6], ncol=1)
+```
+
+## Supplementary Figure 2 B: Violin Plots CASP8, CASP10, CASP2, CASP6
+
+```{r}
+genes <- c("CASP8", "CASP10", "CASP2", "CASP6")
+```
+
+```{r}
+p <- VlnPlot(boost_subset, features = genes, group.by = "new_order", pt.size = 0.1, cols=cols.cluster, combine=F)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+#patchwork <- wrap_plots(p, byrow = T)
+```
+
+### CASP8
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### CASP10
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[2]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### CASP2
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[3]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3, 0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### CASP6
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[4]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+## Supplementary Figure 2 C: Violin Plot ACIN1
+
+```{r}
+genes <- c("ACIN1")
+```
+
+```{r}
+p <- VlnPlot(boost_subset, features = genes, group.by = "new_order", pt.size = 0.1, cols=cols.cluster, combine=FALSE)
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+## Supplementary Figure 3 E: Violin Plot XAF1
+
+```{r}
+genes <- c("XAF1")
+```
+
+```{r}
+p <- VlnPlot(boost_subset, features = genes, group.by = "new_order", pt.size = 0.1, cols=cols.cluster)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  scale_y_continuous(breaks=c(0.0, 0.4, 0.8))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+## Supplementary Figure 4 C: Glut/Gaba split violin Plots CASP3, CASP9, CASP6, BIRC2, XIAP, AREL1, BCL2, BAK1, BAX, USP11, SIVA1, CYCS
+
+```{r}
+rm(list=setdiff(ls(), c("boost", "cols.cluster")))
+```
+
+```{r}
+SLC17A7 <- WhichCells(boost, expression = SLC17A7 > 0)
+SLC17A6 <- WhichCells(boost, expression = SLC17A6 > 0)
+TBR1 <- WhichCells(boost, expression = TBR1 > 0)
+Glut <- union(SLC17A6, SLC17A7)
+Glut <- union(Glut, TBR1)
+```
+
+```{r}
+GAD1 <- WhichCells(boost, expression = GAD1 > 0)
+GAD2 <- WhichCells(boost, expression = GAD2 > 0)
+GAB <- union(GAD1, GAD2)
+```
+
+```{r}
+both_exp <- FetchData(boost, vars= c("SLC17A7", "SLC17A6", "TBR1", "GAD1", "GAD2"), cells = intersect(Glut, GAB))
+both_exp <- data.frame(Glut=rowMeans(both_exp[,1:3]), Gaba=rowMeans(both_exp[,4:5]))
+both_exp$cell_id <- rownames(both_exp)
+both_exp <- both_exp %>% mutate(type=if_else(Glut>Gaba, "Glut", "Gaba"))
+both_GAB <- filter(both_exp, type=="Gaba")
+both_Glut <- filter(both_exp, type=="Glut")
+```
+
+```{r}
+GAB <- setdiff(GAB, Glut)
+GAB <- c(GAB, both_GAB$cell_id)
+Glut <- setdiff(Glut, GAB)
+Glut <- c(Glut, both_Glut$cell_id)
+```
+
+```{r, fig.asp=0.75, fig.width=6}
+boost[["old.ident"]] <- Idents(object = boost)
+boost <- StashIdent(object = boost, save.name = "old.ident")
+Idents(object = boost, cells = GAB) <- "Gaba"
+Idents(object = boost, cells = Glut) <- "Glut"
+Rest <- WhichCells(boost, invert=TRUE, cells=c(GAB, Glut))
+Idents(object = boost, cells = Rest) <- "rest"
+```
+
+```{r}
+boost_subset <- subset(boost, new_order %in% c("3", "4", "5"))
+```
+
+
+```{r}
+subset <- SubsetData(boost_subset, ident.use = c("Gaba", "Glut"))
+```
+
+```{r}
+genes <- c("CASP9", "CASP3", "CASP6")
+```
+
+```{r}
+p <- VlnPlot(subset, features = genes, pt.size = 0, cols=cols.cluster, combine=F)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+#patchwork <- wrap_plots(p, byrow = T)
+```
+
+### CASP3
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[2]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### CASP9
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### CASP6
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[3]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r}
+genes <- c("BIRC2", "XIAP", "AREL1", "SIVA1", "USP11", "BAX", "BCL2", "BAK1","CYCS")
+```
+
+```{r}
+p <- VlnPlot(subset, features = genes, pt.size = 0, cols=cols.cluster, combine=F)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+#patchwork <- wrap_plots(p, byrow = T)
+```
+
+### BIRC2
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### XIAP
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[2]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### AREL1
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[3]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### BCL2
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[7]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### BAK1
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[8]]+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### BAX
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[6]]+
+  scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### USP11
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[5]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### SIVA1
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[4]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+### CYCS
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[9]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+# SessionInfo
+
+```{r}
+sessionInfo()
+```

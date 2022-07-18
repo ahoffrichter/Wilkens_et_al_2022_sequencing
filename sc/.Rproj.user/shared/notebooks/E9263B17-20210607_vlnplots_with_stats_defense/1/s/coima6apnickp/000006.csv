@@ -1,0 +1,10 @@
+"0","p[[1]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("""")+
+  ylab("""")+
+  NoLegend()+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c(""0.0"", ""1.0"", ""2.0""), limits=c(-0.1,max(GetAssayData(boost_subset, slot=""data"")[genes[1],])+max(GetAssayData(boost_subset, slot=""data"")[genes[1],])*0.15))
+"
+"2","Scale for 'y' is already present. Adding another scale for 'y', which will replace the existing
+scale.
+"

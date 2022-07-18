@@ -1,0 +1,1 @@
+"0","TC_plots <- timeclustplot(tca, value = ""z-score(RPKM)"", cols = 3, membership.color =plasma(200))"

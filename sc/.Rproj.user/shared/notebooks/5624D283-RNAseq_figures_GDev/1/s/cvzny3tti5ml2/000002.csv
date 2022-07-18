@@ -1,0 +1,5 @@
+"0","df <- t(TPM[gene_symbol[c(""BAX"", ""BCL2"")], 1:12]) "
+"0","colnames(df) <- c(""BAX"", ""BCL2"")"
+"0","df <- as.data.frame(df)"
+"0","df$timepoint_sample <- c(""NPC_1"", ""d5_1"", ""d25_1"", ""d45_1"", ""NPC_2"", ""NPC_3"", ""d5_2"", ""d25_2"", ""d45_2"",""d5_3"", ""d25_3"", ""d45_3"")"
+"0","df$timepoint <- c(""NPC"", ""d5"", ""d25"", ""d45"", ""NPC"", ""NPC"", ""d5"", ""d25"", ""d45"",""d5"", ""d25"", ""d45"")"

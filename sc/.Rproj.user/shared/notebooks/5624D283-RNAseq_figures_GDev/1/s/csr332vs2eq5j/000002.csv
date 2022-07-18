@@ -1,0 +1,7 @@
+"0","df <- t(mat[gene_symbol[genes], ]) "
+"0","colnames(df) <- c(genes)"
+"0","df <- as.data.frame(df)"
+"0",""
+"0","all_na <- function(x) any(!is.na(x))"
+"0",""
+"0","df <- df %>% select_if(all_na)"

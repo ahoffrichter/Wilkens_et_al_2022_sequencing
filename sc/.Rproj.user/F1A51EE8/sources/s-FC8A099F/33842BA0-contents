@@ -1,0 +1,282 @@
+---
+title: "Violin Plots with stats for defense"
+author: "Anne Hoffrichter"
+date: "2021/06/07"
+output:
+  bookdown::html_document2:
+    code_folding: hide
+    fig_caption: true
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: yes
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=80),tidy=TRUE, fig.asp=1, fig.width=6, warning = FALSE, dev = "svglite")
+```
+
+# Goal
+
+Add information of statistical significance to the plots. Comparison always to cluster 2. 
+
+p_val_adj<0.001: \*\*\*
+
+p_val_adj<0.01: \*\*
+
+p_val_adj<0.05: \*
+
+p_val_adj>=0.05: ns
+
+# Approach
+
+```{r loadLibraries, message=FALSE, warning=FALSE}
+library(Seurat)
+library(viridis)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+library(tidyverse)
+library(purrr)
+library(patchwork)
+library(grid)
+library(clusterProfiler)
+set.seed(42)
+```
+
+```{r, message=FALSE}
+boost <- readRDS("../data/boost_data_seurat.rds")
+cds <- readRDS("../data/boost_data_cds.rds")
+```
+
+```{r}
+cols.cluster <-  hcl.colors(6, "Spectral") %>% rev()
+cols.cluster <- cols.cluster[c(1,3,4,5,6,2)]
+```
+
+```{r, fig.asp=0.5, fig.width=12, dev="pdf"}
+boost_subset <- subset(boost, new_order %in% c("1", "2", "3", "4", "5"))
+cols.use <- list(pseudotime=plasma(length(boost_subset$pseudotime)), ident=cols.cluster)
+```
+
+```{r}
+genes <- c("BAX", "BAK1", "CYCS", "CASP3", "BIRC2", "XIAP", "BIRC5", "AREL1", "HTRA2", "SIVA1", "SIAH1", "USP11", "ACIN1", "PARP1")
+```
+
+```{r}
+my_levels <- c(1,3,4,5)
+# Idents(data_subset) <- "cell_type"
+# Idents(boost_subset) <- factor(Idents(boost_subset), levels = my_levels)
+m <- map(my_levels, ~FindMarkers(object=boost_subset, ident.1 = 2, ident.2 = .x, features = genes, logfc.threshold = 0, min.pct=0))
+
+# m <- map(my_levels, ~FindMarkers(object=boost_subset,ident.1 = 2, ident.2 = .x, features = genes, logfc.threshold = 0, min.pct=0))
+names(m) <- my_levels
+```
+
+```{r}
+m <- map2(my_levels, m, ~cbind(.y, cluster=.x))
+m <- map(m, ~cbind(.x, gene=rownames(.x)))
+m_df <- rbind(m[[1]], m[[2]], m[[3]],m[[4]])
+for(i in seq_along(m_df$p_val_adj)){
+  if(m_df$p_val_adj[i]<0.001){
+    m_df$label[i] <- "***"
+  }else if (m_df$p_val_adj[i]<0.01){
+    m_df$label[i] <- "**"
+  }else if (m_df$p_val_adj[i]<0.05){
+    m_df$label[i] <- "*"
+  }else {
+    m_df$label[i] <- "ns"
+  }
+}
+m_df
+```
+
+```{r}
+p <- vector("list", 12)
+#p[[1]] <- VlnPlot(boost_subset, features = genes[[1]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+```
+
+## `r genes[1]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]] <- VlnPlot(boost_subset, features = genes[[1]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[1]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"), limits=c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[1],])+max(GetAssayData(boost_subset, slot="data")[genes[1],])*0.15))
+```
+
+## `r genes[2]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[2]] <- VlnPlot(boost_subset, features = genes[[2]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[2]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  annotate("text", x=c(1), y=max(GetAssayData(boost_subset, slot="data")[genes[2],])+max(GetAssayData(boost_subset, slot="data")[genes[2],])*0.1, label=c("***"), size=c(7))+
+  ylim(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[2],])+max(GetAssayData(boost_subset, slot="data")[genes[2],])*0.15)
+```
+
+## `r genes[3]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[3]] <- VlnPlot(boost_subset, features = genes[[3]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[3]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  annotate("text", x=c(5), y=max(GetAssayData(boost_subset, slot="data")[genes[3],])+max(GetAssayData(boost_subset, slot="data")[genes[3],])*0.1, label=c("***"), size=c(7))+
+  scale_y_continuous(breaks=c(0.0, 2.0, 4.0), labels=c("0.0", "2.0", "4.0"), limits=c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[3],])+max(GetAssayData(boost_subset, slot="data")[genes[3],])*0.15))
+```
+
+## `r genes[4]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[4]] <- VlnPlot(boost_subset, features = genes[[4]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[4]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  annotate("text", x=c(1,5), y=max(GetAssayData(boost_subset, slot="data")[genes[4],])+max(GetAssayData(boost_subset, slot="data")[genes[4],])*0.1, label=c("***", "**"), size=c(7,7))+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0,3.0), labels=c("0.0", "1.0", "2.0", "3.0"), limits = c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[4],])+max(GetAssayData(boost_subset, slot="data")[genes[4],])*0.15))
+```
+
+## `r genes[5]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[5]] <- VlnPlot(boost_subset, features = genes[[5]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[5]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  ylim(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[5],])+max(GetAssayData(boost_subset, slot="data")[genes[5],])*0.15)
+```
+
+## `r genes[6]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[6]] <- VlnPlot(boost_subset, features = genes[[6]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[6]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  annotate("text", x=c(5), y=max(GetAssayData(boost_subset, slot="data")[genes[6],])+max(GetAssayData(boost_subset, slot="data")[genes[6],])*0.1, label=c("***"), size=c(7))+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"), limits = c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[6],])+max(GetAssayData(boost_subset, slot="data")[genes[6],])*0.15))
+```
+
+## `r genes[7]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[7]] <- VlnPlot(boost_subset, features = genes[[7]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[7]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  annotate("text", x=c(1), y=max(GetAssayData(boost_subset, slot="data")[genes[7],])+max(GetAssayData(boost_subset, slot="data")[genes[7],])*0.1, label=c("***"), size=c(7))+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"), limits=c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[7],])+max(GetAssayData(boost_subset, slot="data")[genes[7],])*0.15))
+```
+
+## `r genes[8]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[8]] <- VlnPlot(boost_subset, features = genes[[8]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[8]]+
+  #scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  ylim(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[8],])+max(GetAssayData(boost_subset, slot="data")[genes[8],])*0.15)
+```
+
+## `r genes[9]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[9]] <- VlnPlot(boost_subset, features = genes[[9]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[9]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"), limits=c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[9],])+max(GetAssayData(boost_subset, slot="data")[genes[9],])*0.15))
+```
+
+## `r genes[10]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[10]] <- VlnPlot(boost_subset, features = genes[[10]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[10]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  annotate("text", x=c(1), y=max(GetAssayData(boost_subset, slot="data")[genes[10],])+max(GetAssayData(boost_subset, slot="data")[genes[10],])*0.1, label=c("***"), size=c(7))+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"), limits=c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[10],])+max(GetAssayData(boost_subset, slot="data")[genes[10],])*0.15))
+```
+
+## `r genes[11]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[11]] <- VlnPlot(boost_subset, features = genes[[11]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[11]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"), limits=c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[11],])+max(GetAssayData(boost_subset, slot="data")[genes[11],])*0.15))
+```
+
+## `r genes[12]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[12]] <- VlnPlot(boost_subset, features = genes[[12]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[12]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  annotate("text", x=c(1), y=max(GetAssayData(boost_subset, slot="data")[genes[12],])+max(GetAssayData(boost_subset, slot="data")[genes[12],])*0.1, label=c("***"), size=c(7))+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"), limits = c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[12],])+max(GetAssayData(boost_subset, slot="data")[genes[12],])*0.15))
+```
+
+## `r genes[13]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[13]] <- VlnPlot(boost_subset, features = genes[[13]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[13]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  annotate("text", x=c(1), y=max(GetAssayData(boost_subset, slot="data")[genes[13],])+max(GetAssayData(boost_subset, slot="data")[genes[13],])*0.1, label=c("***"), size=c(7))+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0), labels=c("0.0", "1.0", "2.0"), limits = c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[13],])+max(GetAssayData(boost_subset, slot="data")[genes[13],])*0.15))
+```
+
+## `r genes[14]`
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[14]] <- VlnPlot(boost_subset, features = genes[[14]], group.by = "new_order", pt.size = 0.1, cols=cols.cluster)
+p[[14]]+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_blank())+
+  xlab("")+
+  ylab("")+
+  NoLegend()+
+  annotate("text", x=c(1), y=max(GetAssayData(boost_subset, slot="data")[genes[14],])+max(GetAssayData(boost_subset, slot="data")[genes[14],])*0.1, label=c("***"), size=c(7))+
+  scale_y_continuous(breaks=c(0.0, 1.0, 2.0, 3.0), labels=c("0.0", "1.0", "2.0", "3.0"), limits = c(-0.1,max(GetAssayData(boost_subset, slot="data")[genes[14],])+max(GetAssayData(boost_subset, slot="data")[genes[14],])*0.15))
+```
+
+
+```{r}
+sessionInfo()
+```

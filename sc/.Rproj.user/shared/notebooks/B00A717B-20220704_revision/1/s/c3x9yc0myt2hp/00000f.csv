@@ -1,0 +1,5 @@
+"0","SLC17A7 <- WhichCells(boost, expression = SLC17A7 > 0)"
+"0","SLC17A6 <- WhichCells(boost, expression = SLC17A6 > 0)"
+"0","TBR1 <- WhichCells(boost, expression = TBR1 > 0)"
+"0","Glut <- union(SLC17A6, SLC17A7)"
+"0","Glut <- union(Glut, TBR1)"

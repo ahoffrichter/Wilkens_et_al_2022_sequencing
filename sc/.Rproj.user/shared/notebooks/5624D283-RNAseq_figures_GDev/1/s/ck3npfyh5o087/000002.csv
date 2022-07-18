@@ -1,0 +1,8 @@
+"0","counts <- counts(dds)"
+"0","id <- dds@rowRanges@elementMetadata$gene_symbol"
+"0","id <- as.data.frame(id)"
+"0","id$ENS <- rownames(dds) "
+"0",""
+"0","x <- merge(id, l, by.x=2, by.y=4, sort=F)"
+"0",""
+"0","features <- data.frame(id=x$ENS, chr=x$X.chrom, start=x$chromStart, end=x$chromEnd)"

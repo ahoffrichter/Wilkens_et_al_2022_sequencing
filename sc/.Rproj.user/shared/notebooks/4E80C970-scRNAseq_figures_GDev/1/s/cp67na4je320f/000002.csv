@@ -1,0 +1,5 @@
+"0","df %>%"
+"0","  group_by(new_order) %>%"
+"0","  summarise(mean = mean(NMIdiscriminable), sd=sd(NMIdiscriminable))"
+"2","`summarise()` ungrouping output (override with `.groups` argument)
+"

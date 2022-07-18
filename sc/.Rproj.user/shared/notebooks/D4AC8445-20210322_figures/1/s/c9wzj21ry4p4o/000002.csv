@@ -1,0 +1,5 @@
+"0","NPC <- rowMeans(ncounts[,1:3])"
+"0","d5 <- rowMeans(ncounts[,4:6])"
+"0","d25 <- rowMeans(ncounts[,7:9])"
+"0","d45 <- rowMeans(ncounts[,10:12])"
+"0","av_ncounts <- cbind(NPC, d5,d25,d45)"

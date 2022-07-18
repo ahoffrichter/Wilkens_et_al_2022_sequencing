@@ -1,0 +1,5 @@
+"0","rld <- rlog(dds , blind = TRUE)"
+"0","sampleDist <- rld %>% assay() %>% t() %>% dist"
+"0","sampleDistMatrix <- as.matrix(sampleDist)"
+"0","rownames(sampleDistMatrix) <- paste(colnames(rld), "" - "", rld$timepoint)"
+"0","colnames(sampleDistMatrix) <- NULL"

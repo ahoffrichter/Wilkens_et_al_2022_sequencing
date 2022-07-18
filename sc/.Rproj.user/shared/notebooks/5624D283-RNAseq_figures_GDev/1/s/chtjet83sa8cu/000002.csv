@@ -1,0 +1,4 @@
+"0","go_id = GOID( GOTERM[ Term(GOTERM) == ""negative regulation of neuron death""])"
+"0","allegs <- get(go_id, org.Hs.egGO2ALLEGS)"
+"0","genes <- unlist(mget(allegs, org.Hs.egSYMBOL))"
+"0","genes <- unique(genes)"

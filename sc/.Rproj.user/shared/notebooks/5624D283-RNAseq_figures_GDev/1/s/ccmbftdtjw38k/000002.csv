@@ -1,0 +1,13 @@
+"0","cluster <- tca@clusterRes@cluster"
+"0","df <- as.data.frame(cluster)"
+"0","ens.str <- rownames(df)"
+"0","df$symbol <- mapIds(org.Hs.eg.db,"
+"0","                     keys=ens.str,"
+"0","                     column=""SYMBOL"","
+"0","                     keytype=""ENSEMBL"","
+"0","                     multiVals=""first"")  "
+"2","'select()' returned 1:many mapping between keys and columns
+"
+"0","for(i in seq_along(df$cluster)){"
+"0","  df$membership_percentage[i] <- tca@clusterRes@membership[i, df$cluster[i]]"
+"0","}"

@@ -1,0 +1,8 @@
+"0","my_GO_plot <- function(){"
+"0","ggplot(GO_ordered, aes(foldchange, reorder(stringr::str_wrap(Description, 40), foldchange))) +"
+"0","  geom_col(aes(fill=p.adjust))+"
+"0","  theme_minimal(base_size = 24)+"
+"0","  xlab(""fold enrichment"")+"
+"0","  ylab("""")+labs(fill = ""p.adjust"")"
+"0","}"
+"0","BP <- my_GO_plot()"

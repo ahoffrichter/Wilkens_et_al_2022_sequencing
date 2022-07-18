@@ -1,0 +1,2 @@
+"0","subset <- SubsetData(boost_subset, ident.use = c(""Gaba"", ""Glut""))"
+"0","DimPlot(subset)"

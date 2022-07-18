@@ -1,0 +1,3 @@
+"0","df <- as.data.frame(TC_res[[3]])"
+"0","sigGenes <- df$ENTREZ"
+"0","sigGenes <- na.exclude(sigGenes)"

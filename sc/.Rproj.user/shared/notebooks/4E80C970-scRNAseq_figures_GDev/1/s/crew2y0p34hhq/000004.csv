@@ -1,0 +1,6 @@
+"0","FeaturePlot(boost, features = ""pseudotime"", cols=plasma(length(boost$pseudotime)), pt.size = 2)+ "
+"0","  theme(axis.text=element_text(size=25), axis.title = element_text(size=30), plot.title=element_blank(), legend.text = element_text(size = 20), legend.key.size = unit(0.8, ""cm""))+"
+"0","  scale_y_continuous(breaks=c(-5, 0,5))"
+"2","Scale for 'y' is already present. Adding another scale for 'y', which will replace the existing
+scale.
+"

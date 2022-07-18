@@ -1,0 +1,2 @@
+"0","genes <- c(""SOX2"", ""NES"", ""TUBB3"", ""DCX"", ""SNAP25"", ""SYN1"")"
+"0","cds_subset <- cds[,SummarizedExperiment::colData(cds)$ident %in% c(""1"", ""2"", ""3"", ""4"", ""5"")]"

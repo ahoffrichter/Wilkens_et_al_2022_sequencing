@@ -1,0 +1,6 @@
+"0","DoHeatmap(boost_subset, features = genes, group.by=""ident"", draw.lines = FALSE, label=FALSE, raster = FALSE)+"
+"0","  scale_fill_viridis_c(option=""viridis"")+"
+"0","  theme(legend.text = element_text(size = 20), legend.key.size = unit(0.8, ""cm""), legend.text.align = 1, legend.title = element_text(size=30))"
+"2","Scale for 'fill' is already present. Adding another scale for 'fill', which will replace the
+existing scale.
+"

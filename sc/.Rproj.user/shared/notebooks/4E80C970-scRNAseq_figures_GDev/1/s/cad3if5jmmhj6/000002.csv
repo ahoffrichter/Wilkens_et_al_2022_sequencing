@@ -1,0 +1,3 @@
+"0","MF <- my_GO_plot(GO_sub)+ "
+"0","  scale_fill_continuous(breaks=c(0.4e-03,0.8e-03, 1.2e-03, 1.6e-03), labels=c(""0.4e-03"",""0.8e-03"", ""1.2e-03"", ""1.6e-03""))+"
+"0","  scale_y_discrete(limits=rev(stringr::str_wrap(GO_sub$Description, 40)))"

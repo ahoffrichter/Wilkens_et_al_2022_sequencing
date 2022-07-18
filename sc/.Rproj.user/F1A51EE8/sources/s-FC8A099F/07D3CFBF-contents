@@ -1,0 +1,289 @@
+---
+title: "Figures 2021/03/22"
+author: "Anne Hoffrichter"
+date: "2021/03/22"
+output:
+  bookdown::html_document2:
+    code_folding: hide
+    fig_caption: true
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: yes
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=80),tidy=TRUE, fig.asp=1, fig.width=6, warning = FALSE, dev = "svg")
+```
+
+# Goal
+
+Preparation of figures. 
+
+# Approach
+
+```{r loadLibraries, message=FALSE, warning=FALSE}
+library(Seurat)
+library(viridis)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+library(tidyverse)
+library(purrr)
+library(patchwork)
+library(grid)
+library(clusterProfiler)
+set.seed(42)
+```
+
+```{r, message=FALSE}
+boost <- readRDS("../data/boost_data_seurat.rds")
+cds <- readRDS("../data/boost_data_cds.rds")
+```
+
+# Figures
+
+```{r}
+cols.cluster <-  hcl.colors(6, "Spectral") %>% rev()
+cols.cluster <- cols.cluster[c(1,3,4,5,6,2)]
+```
+
+```{r, fig.asp=0.5, fig.width=12, dev="pdf"}
+boost_subset <- subset(boost, new_order %in% c("1", "2", "3", "4", "5"))
+cols.use <- list(pseudotime=plasma(length(boost_subset$pseudotime)), ident=cols.cluster)
+```
+
+## Violin Plots
+
+```{r}
+genes <- c("MCL1","BCL2L1", "CASP7", "CASP9", "APAF1", "CASP8", "CASP10", "BCL2L2", "BID", "BAD", "BCL2L11", "BBC3", "PMAIP1", "HRK", "BMF", "BIK", "BOK", "NAIP", "DIABLO.1")
+```
+
+```{r}
+p <- VlnPlot(boost_subset, features = genes, group.by = "new_order", pt.size = 0.1, cols=cols.cluster, combine=F)#+NoLegend()+xlab("")#+theme(axis.text.x = element_text(angle = 0,  hjust = 0.5))
+#patchwork <- wrap_plots(p, byrow = T)
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[1]]+
+  scale_y_continuous(breaks=c(0.0, 0.6,1.2 , 1.8))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[2]]+
+  scale_y_continuous(breaks=c(0.0, 0.6,1.2 , 1.8))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[3]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[4]]+
+  scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[5]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[6]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[7]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[8]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[9]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[10]]+
+  scale_y_continuous(breaks=c(0.0, 0.6, 1.2, 1.8))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[11]]+
+  scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[12]]+
+  scale_y_continuous(breaks=c(0.0, 0.6, 1.2, 1.8))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[13]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[14]]+
+  scale_y_continuous(breaks=c(0.0, 0.6,1.2 , 1.8))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[15]]+
+  scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[16]]+
+  scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[17]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[18]]+
+  #scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+```{r, fig.asp=0.6, fig.width=4}
+p[[19]]+
+  scale_y_continuous(breaks=c(0.0, 0.3,0.6, 0.9))+
+  theme(axis.text.x = element_text(angle = 0,  hjust = 0.5),axis.text=element_text(size=20), plot.title=element_text(size=18))+
+  xlab("")+
+  ylab("")+
+  NoLegend()
+```
+
+## Heatmap
+
+```{r, message=FALSE}
+markers <- FindAllMarkers(boost_subset)
+```
+
+```{r}
+markers_c1 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==1) %>% pull("gene") %>% .[1:10]
+markers_c2 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==2) %>% pull("gene") %>% .[1:10]
+markers_c3 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==3) %>% pull("gene") %>% .[1:11]
+markers_c4 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==4) %>% pull("gene") %>% .[1:12]
+markers_c5 <- markers %>% filter(avg_logFC>0) %>% filter(cluster==5) %>% pull("gene") %>% .[1:10]
+marker_list <- c(markers_c1, markers_c2, markers_c3, markers_c4, markers_c5)
+```
+
+```{r}
+dds <- readRDS("../../../RW-project/data/013_dds.rds")
+#count_list <- list()
+ncounts1 <- dds[dds@rowRanges@elementMetadata@listData[["gene_symbol"]] %in% marker_list]
+ncounts <- counts(ncounts1, normalize=T)
+rownames(ncounts) <- ncounts1@rowRanges@elementMetadata@listData[["gene_symbol"]]
+colnames(ncounts) <- c("NPC_1", "d5_1", "d25_1", "d45_1", "NPC_2", "NPC_3", "d5_2", "d25_2", "d45_2","d5_3", "d25_3", "d45_3")
+ncounts <- ncounts[,c(1,5,6,2,7,10,3,8,11,4,9,12)]
+ncounts <- ncounts[match(marker_list, rownames(ncounts)),]
+ncounts <- na.omit(ncounts)
+```
+
+```{r, fig.asp=1.2, fig.width=14}
+p <- limma::coolmap(ncounts, linkage.col = "none", linkage.row = "none", col=viridis(100), cexRow=2, margins = c(5, 10), cexCol=2, lmat = rbind(c(0,3),c(2,1),c(0,4)), lwid = c(0.5,4), lhei = c(0.5,4,0.5), main="", show.dendrogram = "none", rowsep=c(10,20, 30, 40, 50))
+```
+
+```{r}
+NPC <- rowMeans(ncounts[,1:3])
+d5 <- rowMeans(ncounts[,4:6])
+d25 <- rowMeans(ncounts[,7:9])
+d45 <- rowMeans(ncounts[,10:12])
+av_ncounts <- cbind(NPC, d5,d25,d45)
+```
+
+```{r, fig.asp=1.2, fig.width=14}
+p <- limma::coolmap(av_ncounts, linkage.col = "none", linkage.row = "none", col=viridis(100), cexRow=2, margins = c(5, 10), cexCol=2, lmat = rbind(c(0,3),c(2,1),c(0,4)), lwid = c(0.5,4), lhei = c(0.5,4,0.5), main="", show.dendrogram = "none", rowsep=c(10,20, 30, 40, 50))
+```
+
+
+
+
+
+
+```{r}
+sessionInfo()
+```
+

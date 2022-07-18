@@ -1,0 +1,14 @@
+"0","lineage_cds <- cds_subset[rowData(cds_subset)$gene_short_name %in% ""SOX2"",]"
+"0","p <- list()"
+"0","p[[1]] <- my_plot_genes(lineage_cds, color_cells_by=""new_order"", cell_size = 4, line.size=2)+"
+"0","  theme_grey(base_size = 40,)+"
+"0","  NoLegend()+"
+"0","  scale_color_manual(values=c(""#584B9F"", ""#BAEEAE"", ""#FCDE85"", ""#ED820A"", ""#A71B4B""))+"
+"0","  theme(axis.title=element_blank(),"
+"0","        axis.text.x=element_blank(), "
+"0","        strip.background = element_rect(fill = ""white"", colour = NA), "
+"0","        strip.text.x = element_text(face=""italic""))+"
+"0","  scale_y_log10(breaks=c(0.01,0.1,1,10), labels=c(""0.01"",""0.1"",""1"",""10""))"
+"2","Scale for 'y' is already present. Adding another scale for 'y', which will replace the existing
+scale.
+"

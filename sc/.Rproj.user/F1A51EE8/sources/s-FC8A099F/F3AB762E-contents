@@ -1,0 +1,399 @@
+---
+title: "Complete Data Analysis workflow for scRNAseq data"
+author: "Anne Hoffrichter"
+date: "2020/11/26"
+output:
+  bookdown::html_document2:
+    code_folding: show
+    fig_caption: true
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: yes
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=80),tidy=TRUE, fig.asp=1, fig.width=6, warning = FALSE)
+```
+
+# Goal   
+
+Complete data analysis from count matrix to files used for figures. 
+
+# Approach   
+
+
+```{r loadLibraries, message=FALSE, warning=FALSE}
+library(Seurat)
+library(viridis)
+library(Matrix)
+library(SingleCellExperiment)
+library(scater)
+library(DESeq2)
+library(neuMatIdx)
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+library(monocle3)
+library(SeuratWrappers)
+library(tidyverse)
+library(purrr)
+library(grid)
+library(patchwork)
+library(limma)
+set.seed(42)
+```
+
+## Filtering
+
+The raw data is filtered on various properties. The output of cellranger [10x Genomics] count is read into R. First filtering parameters are determined, later filtering is performed in a Seurat S4 object. 
+
+```{r}
+# Paths to the cellbarcode, features (genenames) and count matrix (molecules) files. 
+cellbarcodes <- read.table("../raw_data/filtered_feature_bc_matrix/barcodes.tsv")
+genenames <- read.table("../raw_data/filtered_feature_bc_matrix/features.tsv")
+molecules <- readMM("../raw_data/filtered_feature_bc_matrix/matrix.mtx")
+```
+
+
+```{r}
+rownames(molecules) <- genenames[,1]
+colnames(molecules) <- cellbarcodes[,1]
+umi <- SingleCellExperiment(assays=list(counts=as.matrix(molecules)))
+```
+
+### Filter genes without any counts
+
+Genes that are not expressed in any cell are removed before the analysis. 
+
+```{r}
+keep_feature <- rowSums(counts(umi) > 0) > 0
+umi <- umi[keep_feature, ]
+```
+
+### Cell QC Library size
+
+Consider the total number of RNA molecules detected per sample. "Cells" with few molecules were most probably empty droplets and should be removed. Data should be normal-distributed, anything that appears on the left end outside the normal distribution, should be removed before analysis. 
+
+```{r}
+umi <- perCellQCMetrics(umi)
+```
+
+
+```{r, fig.asp=0.5}
+hist(
+  umi$total,
+  breaks = 400,
+  xlim=range(1:30000),
+  main="Histogram of total counts",
+  xlab="Total counts"
+)
+abline(v = 5000, col = "red")
+```
+
+Check how many cells will be kept (TRUE)/ removed (FALSE) by the filter:
+
+```{r}
+filter_by_total_counts <- (umi$total > 5000)
+table(filter_by_total_counts)
+```
+
+### Filter for detected genes
+
+In addition to ensuring sufficient sequencing depth for each sample, we also want to make sure that the reads are distributed across the transcriptome. Thus, we count the total number of unique genes detected in each sample. If detection rates were equal across the cells then the distribution should be approximately normal. Thus those cells in the left tail of the distribution should be removed.
+
+```{r, fig.asp=0.5}
+hist(
+  umi$detected,
+  breaks = 100,
+  main="Histogram of detected genes per cell",
+  xlab="Detected genes per cell"
+)
+abline(v = 2000, col = "red")
+```
+
+Check how many cells will be kept (TRUE)/ removed (FALSE) by the filter:
+
+```{r}
+filter_by_expr_features <- (umi$detected > 2000)
+table(filter_by_expr_features)
+```
+
+### Add QC counts for mitochondrial (MT) genes 
+
+Control features for MT genes are defined and quality metrics calculated. A high expression of mitochondrial genes can indicate apoptotic cells. 
+
+```{r, message=FALSE}
+umi <- SingleCellExperiment(assays=list(counts=as.matrix(molecules)))
+keep_feature <- rowSums(counts(umi) > 0) > 0
+umi <- umi[keep_feature, ]
+altExp(umi, "MT")<- umi[rownames(umi) %in% 
+  c("ENSG00000198899", "ENSG00000198727", "ENSG00000198888",
+    "ENSG00000198886", "ENSG00000212907", "ENSG00000198786",
+    "ENSG00000198695", "ENSG00000198712", "ENSG00000198804",
+    "ENSG00000198763", "ENSG00000228253", "ENSG00000198938",
+    "ENSG00000198840"),]
+
+umi <- perCellQCMetrics(umi,use_altexps=TRUE)
+```
+
+Check distribution of MT-genes
+
+```{r}
+plot(
+  umi$total, umi$altexps_MT_percent,
+  ylab="Expression of MT genes [%]",
+  xlab="Total counts"
+)
+```
+
+Check how many cells will be kept (TRUE)/ removed (FALSE) by the filter:
+
+```{r}
+filter_by_MT <- umi$altexps_MT_percent < 10
+table(filter_by_MT)
+```
+
+```{r}
+# remove everything from global env
+rm(list=ls())
+```
+
+Save parameters for filtering, as deduced from visual inspection of the different distributions. 
+
+```{r}
+param <- list()
+param$total_counts <- 5000
+param$expr_features <- 2000
+param$MT <- 10
+```
+
+
+## Filtering the data with Seurat
+
+```{r}
+ctrl.rawdata <- Read10X(data.dir = "../raw_data/filtered_feature_bc_matrix/")
+```
+
+### Set up Seurat object
+
+Cells are at this step filtered for the minimum of expressed features. Features are only kept when they are expressed in a minimum of 3 cells. 
+
+```{r}
+ctrl <- CreateSeuratObject(counts =ctrl.rawdata, min.cells = 3, min.features = param$expr_features, project = "boost")
+ctrl$KO <- "CTRL"
+ctrl[["percent.mt"]] <- PercentageFeatureSet(object = ctrl, pattern = "^MT-")
+```
+
+
+### Filter cells
+
+Use for colSums > cut-off in `total_counts`, for percent.mt `MT`
+
+```{r, message=FALSE}
+ctrl <- subset(x=ctrl, subset= colSums(ctrl)>param$total_counts & percent.mt <param$MT)
+ctrl <- NormalizeData(object = ctrl, verbose = FALSE)
+ctrl <- FindVariableFeatures(object = ctrl, selection.method = "vst", nfeatures = 2000)
+```
+
+## SCTransform
+
+`SCTransform` uses regularized negative binomial regression to normalize UMI count data. 
+
+```{r}
+boost <- SCTransform(ctrl, verbose = FALSE)
+```
+
+```{r}
+rm(ctrl.rawdata, ctrl, param)
+```
+
+
+## Use bulk RNAseq marker for PCA
+
+Load data from bulk RNAseq project. Select variable features for each time point (d0/progenitors, d5, d25, d45, d25&d45). 
+
+The variable features for each time point were selected, so that the padj-value was at least less than 0.1 and so that there were not more than 1000 variable features per time point. There were also variable features selected for combining d25 & d45, as these two time points show only few variable features by themselves, as their expression profiles are very similar. 
+
+```{r}
+# set path to results from RNAseq project
+res <- readRDS("../../bulk/data/res.rds")
+```
+
+```{r}
+d0_markers <- map(res[1:3], ~.x %>% as.data.frame() %>% filter(padj<10^-18 & log2FoldChange <0) %>%  .$gene_symbol)
+d0_123 <- purrr::reduce(d0_markers, dplyr::intersect)
+```
+
+```{r}
+d5_markers <- map(res[4:6], ~.x %>% as.data.frame() %>% filter(padj<0.05 & log2FoldChange <0) %>%  .$gene_symbol)
+d5_123 <- purrr::reduce(d5_markers, dplyr::intersect)
+```
+
+```{r}
+d25_markers <- map(res[7:9], ~.x %>% as.data.frame() %>% filter(padj<0.1 & log2FoldChange <0) %>%  .$gene_symbol)
+d25_123 <- purrr::reduce(d25_markers, dplyr::intersect)
+```
+
+```{r}
+d45_markers <- map(res[10:12], ~.x %>% as.data.frame() %>% filter(padj<0.1 & log2FoldChange <0) %>%  .$gene_symbol)
+d45_123 <- purrr::reduce(d45_markers, dplyr::intersect)
+```
+
+```{r}
+d25_45_markers <- map(res[c(7,8,10,11)], ~.x %>% as.data.frame() %>% filter(padj<0.0005 & log2FoldChange <0) %>%  .$gene_symbol)
+d25_45_123 <- purrr::reduce(d25_45_markers, dplyr::intersect)
+```
+
+```{r}
+genes <- c(d0_123, d5_123, d25_123, d45_123, d25_45_123)
+```
+
+```{r}
+rm(d0_markers, d5_markers, d25_markers, d45_markers,  d25_45_markers, d0_123, d5_123, d25_123, d45_123, d25_45_123)
+```
+
+
+### Scale data including all features
+
+```{r}
+DefaultAssay(boost) <- "RNA"
+boost <- ScaleData(boost, features = row.names(boost))
+```
+
+### Use marker genes from bulk data as features for guiding PCA
+
+```{r}
+boost <- RunPCA(boost, verbose = FALSE, features = genes)
+```
+
+## Dimensional reduction and clustering
+
+```{r}
+boost <- RunUMAP(boost, dims = 1:30, verbose = FALSE)
+boost <- FindNeighbors(boost, dims=1:50, k.param=30)
+boost <- FindClusters(boost, verbose = F, resolution = 1)
+```
+
+Changing the names of the clusters to better represent their order in pseudotime.
+
+```{r}
+new_order <- c("4", "5", "2", "6", "3", "1")
+names(new_order) <- levels(boost)
+boost <-RenameIdents(boost, new_order)
+boost <- AddMetaData(boost, Idents(boost), col.name =  "new_order")
+order_new_order <- c("1", "2", "3", "4", "5", "6")
+Idents(boost) <- factor(Idents(boost), levels = order_new_order)
+boost$new_order <- factor(boost$new_order, levels = order_new_order)
+```
+
+## Add NMI information to Seurat data
+
+The neuron maturity index (NMI) is estimated using the `neuMatIdx` package. 
+
+```{r}
+# NMI 
+mat <- as.matrix(boost@assays$RNA@data)
+```
+
+```{r, message=FALSE}
+symbl <- rownames(mat)
+ensmbl <- mapIds(org.Hs.eg.db,
+                     keys=symbl,
+                     column="ENSEMBL",
+                     keytype="SYMBOL",
+                     multiVals="first")
+ensml2 <- as.vector(ensmbl)
+rownames(mat) <- ensml2 
+```
+
+```{r}
+rn <- rownames(mat)
+xx <- is.na(rn)
+df <- mat[!xx,]
+```
+
+```{r, message=FALSE}
+NMI <- predictNMI(df)
+```
+
+```{r}
+boost$NMIoverall <- NMI$overallNMI$overall
+boost$NMIdiscriminable <- NMI$overallNMI$discriminable
+boost$NMIactivity <- NMI$overallNMI$activity
+```
+
+```{r}
+rm(list=setdiff(ls(), "boost"))
+```
+
+## Adding pseudotime trajectory with monocle3
+
+Do these interactive steps the first time you use the script. The graph was split into a "long" and a "short" branch, to facilitate closer to reality ordering. In the `order_cells()` step the lower left point was used as starting point for the trajectory, as marker genes for early development are expressed higher in these regions. 
+Cluster 6 was excluded from pseudotime ordering.
+
+```{r}
+# boost_subset <- subset(boost, new_order%in%c("1", "2", "3", "4", "5"))
+cds <- as.cell_data_set(boost)
+
+sf <- rep(1,length(colData(cds)$KO))
+names(sf) <- colnames(cds)
+colData(cds)$Size_Factor <- sf
+
+cds <- cluster_cells(cds)
+cds <- learn_graph(cds)
+
+# long_branch.sub <- subset(as.Seurat(cds), monocle3_clusters == 1)
+# short_branch.sub <- subset(as.Seurat(cds), monocle3_clusters == 2)
+# cds_long <- as.cell_data_set(long_branch.sub)
+# cds_long <- learn_graph(cds_long)
+# cds_long <- order_cells(cds_long) # choose 7th point from bottom, click "choose/unchose", point turns red, then click "done"
+# 
+# cds_short <- as.cell_data_set(short_branch.sub)
+# cds_short <- learn_graph(cds_short)
+# # FeaturePlot(short_branch.sub, features=c("MKI67", "SOX2", "HES1", "NES"))
+# cds_short <- order_cells(cds_short) # use point lowest left,  point turns red, then click "done"
+# saveRDS(cds_long, "../data/long_branch_cells.rds")
+# saveRDS(cds_short, "../data/short_branch_cells.rds")
+```
+
+```{r}
+long_branch <- readRDS("../data/long_branch_cells.rds")
+```
+
+```{r}
+short_branch <- readRDS("../data/short_branch_cells.rds")
+```
+
+```{r}
+rowData(long_branch)$gene_short_name <- rownames(rowData(long_branch))
+rowData(short_branch)$gene_short_name <- rownames(rowData(short_branch))
+```
+
+Combining pseudotimes of short and long branch by adding the maximum value of the short branch to each value of the long branch. Marker gene expression indicates, that cells in the short branch are from earlier time points, compared to cells in the long branch. 
+
+```{r}
+long_branch@principal_graph_aux@listData$UMAP$pseudotime <- long_branch@principal_graph_aux@listData$UMAP$pseudotime+max(short_branch@principal_graph_aux@listData$UMAP$pseudotime)
+```
+
+```{r}
+boost$pseudotime <- c(long_branch@principal_graph_aux@listData$UMAP$pseudotime, short_branch@principal_graph_aux@listData$UMAP$pseudotime)
+
+cds@principal_graph_aux@listData$UMAP$pseudotime <- c(long_branch@principal_graph_aux@listData$UMAP$pseudotime, short_branch@principal_graph_aux@listData$UMAP$pseudotime)
+
+rowData(cds)$gene_short_name <- rownames(rowData(cds))
+saveRDS(boost, "../data/boost_data_seurat.rds")
+saveRDS(cds, "../data/boost_data_cds.rds")
+
+```
+
+```{r}
+rm(list=setdiff(ls(), c("boost", "cds")))
+```
+
+# SessionInfo
+
+```{r}
+sessionInfo()
+```
+

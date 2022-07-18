@@ -1,0 +1,4 @@
+"0","sigGenes <- marker_c6 %>% filter(p_val_adj<0.05) %>% select(""ENTREZ"")"
+"0","sigGenes <- marker_c6$ENTREZ[marker_c6$p_val_adj < 0.05 & !is.na(marker_c6$p_val_adj)]"
+"0","sigGenes <- na.exclude(sigGenes)"
+"0","#kk <- enrichGO(gene = sigGenes, ont=""BP"", OrgDb = ""org.Hs.eg.db"")"

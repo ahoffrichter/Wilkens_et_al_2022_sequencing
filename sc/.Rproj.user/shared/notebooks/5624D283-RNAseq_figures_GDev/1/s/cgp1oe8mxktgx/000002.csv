@@ -1,0 +1,8 @@
+"0","# change file_path to directory of featureCounts"
+"0","tbl <- list.files(path = ""../raw_data/featureCounts/"", pattern = ""*.tsv"", full.names = T)"
+"0","TPM <- map(tbl, read.table, header=T, comment.char="""") %>% map(15)"
+"0","names(TPM) <- c(""mat1"", ""mat10"", ""mat11"", ""mat12"", ""mat2"", ""mat3"", ""mat4"", ""mat5"", ""mat6"", ""mat7"", ""mat8"", ""mat9"")"
+"0","TPM <- TPM %>% as.data.frame()"
+"0","rownames(TPM) <- read.table(tbl[1], header = T, comment.char = """")[,4] %>% substr(1,15)"
+"0","TPM$gene_name <- read.table(tbl[1], header = T, comment.char = """")$name"
+"0","TPM$ENSID <- rownames(TPM)"

@@ -1,0 +1,3 @@
+"0","mat <- TPM[,1:12]"
+"0","gene_symbol <-rownames(mat)"
+"0","names(gene_symbol) <-  TPM$gene_name"
